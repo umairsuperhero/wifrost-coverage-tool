@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import folium
+from folium.plugins import MeasureControl
 from streamlit_folium import st_folium
 from dotenv import load_dotenv
 import plotly.graph_objects as go
@@ -39,54 +40,241 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 html, body, [class*="css"] { font-family: 'Outfit', sans-serif; }
-.main-header {
-    background: linear-gradient(135deg,#1B365D 0%,#102A45 100%);
-    padding:20px 25px; border-radius:12px; color:white;
-    margin-bottom:25px; box-shadow:0 4px 15px rgba(0,0,0,.1);
-    display:flex; align-items:center; justify-content:space-between;
+.block-container { padding-top: 1.2rem !important; padding-bottom: 2rem !important; }
+
+/* ── Sidebar ─────────────────────────── */
+[data-testid="stSidebar"] { background: #f0f2f6; }
+[data-testid="stSidebar"] > div:first-child { padding: 0.5rem 0.9rem 1rem; }
+.sb-section {
+    background: #1B365D;
+    color: white;
+    padding: 7px 12px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    margin: 16px 0 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
 }
-.main-header h1 { margin:0; font-size:28px; font-weight:700; letter-spacing:-.5px; }
-.main-header p  { margin:5px 0 0 0; font-size:14px; opacity:.8; }
+.sb-section-alt {
+    background: #2c4a7c;
+    color: white;
+    padding: 7px 12px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    margin: 16px 0 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+/* ── Header ──────────────────────────── */
+.main-header {
+    background: linear-gradient(135deg, #1B365D 0%, #0e2040 100%);
+    padding: 18px 28px;
+    border-radius: 12px;
+    color: white;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.15);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.main-header h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.5px; }
+.main-header p  { margin: 4px 0 0; font-size: 13px; opacity: .75; }
+.header-badge {
+    background: rgba(255,255,255,.15);
+    border: 1.5px solid rgba(255,255,255,.5);
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+    letter-spacing: .3px;
+}
+
+/* ── Welcome cards ───────────────────── */
+.welcome-card {
+    background: white;
+    border: 1px solid #e0e4ea;
+    border-radius: 12px;
+    padding: 24px 20px;
+    text-align: center;
+    transition: transform .2s, box-shadow .2s;
+    height: 100%;
+}
+.welcome-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,.1); }
+.welcome-card-icon { font-size: 40px; margin-bottom: 12px; }
+.welcome-card-title { font-size: 15px; font-weight: 700; color: #1B365D; margin-bottom: 8px; }
+.welcome-card-text { font-size: 13px; color: #667; line-height: 1.5; }
+
+/* ── Terrain badge ───────────────────── */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+}
+.badge-ok  { background: #d4edda; color: #155724; }
+.badge-warn { background: #fff3cd; color: #856404; }
+
+/* ── Banners ─────────────────────────── */
 .banner-success {
-    background:#d4edda; border-left:6px solid #28a745; color:#155724;
-    padding:15px 20px; border-radius:6px; margin-bottom:20px;
-    font-weight:600; font-size:16px;
+    background: linear-gradient(135deg, #d4edda 0%, #c8e6c9 100%);
+    border-left: 5px solid #28a745;
+    color: #155724;
+    padding: 14px 20px;
+    border-radius: 8px;
+    margin: 12px 0;
+    font-weight: 600;
+    font-size: 15px;
+    box-shadow: 0 2px 10px rgba(40,167,69,.15);
 }
 .banner-warning {
-    background:#fff3cd; border-left:6px solid #ffc107; color:#856404;
-    padding:15px 20px; border-radius:6px; margin-bottom:20px;
-    font-weight:600; font-size:16px;
+    background: linear-gradient(135deg, #fff3cd 0%, #ffe57f 100%);
+    border-left: 5px solid #ffc107;
+    color: #856404;
+    padding: 14px 20px;
+    border-radius: 8px;
+    margin: 12px 0;
+    font-weight: 600;
+    font-size: 15px;
+    box-shadow: 0 2px 10px rgba(255,193,7,.15);
 }
-.kpi-container { display:flex; justify-content:space-between; gap:15px; margin-bottom:20px; }
+
+/* ── KPI cards ───────────────────────── */
+.kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin: 16px 0 20px;
+}
 .kpi-card {
-    background:#fff; border:1px solid #dfe1e6; border-radius:8px;
-    padding:15px; flex:1; text-align:center;
-    box-shadow:0 2px 6px rgba(9,30,66,.08); transition:transform .2s;
+    background: white;
+    border-radius: 10px;
+    padding: 16px 18px;
+    border-left: 4px solid var(--accent, #1B365D);
+    box-shadow: 0 2px 10px rgba(0,0,0,.06);
+    transition: transform .15s, box-shadow .15s;
 }
-.kpi-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(9,30,66,.12); }
-.kpi-title { font-size:12px; color:#6b778c; font-weight:600; text-transform:uppercase;
-             margin-bottom:8px; letter-spacing:.5px; }
-.kpi-value { font-size:24px; color:#1b365d; font-weight:700; }
-.legend-container {
-    background:white; padding:10px 15px; border-radius:6px;
-    border:1px solid #dfe1e6; display:flex; align-items:center;
-    gap:20px; margin-top:10px; margin-bottom:20px;
+.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 5px 16px rgba(0,0,0,.1); }
+.kpi-card.c1 { --accent: #27ae60; }
+.kpi-card.c2 { --accent: #3498db; }
+.kpi-card.c3 { --accent: #9b59b6; }
+.kpi-card.c4 { --accent: #1B365D; }
+.kpi-title {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: #8896a5;
+    margin-bottom: 6px;
 }
-.legend-item { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:500; }
-.legend-dot  { width:12px; height:12px; border-radius:3px; }
+.kpi-value { font-size: 26px; font-weight: 700; color: #1B365D; line-height: 1.1; }
+
+/* ── Map wrapper ─────────────────────── */
+.map-wrap {
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 3px 16px rgba(0,0,0,.12);
+    margin-bottom: 16px;
+    border: 1px solid #dfe1e6;
+}
+
+/* ── Legend bar ──────────────────────── */
+.legend-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: white;
+    padding: 9px 16px;
+    border-radius: 8px;
+    border: 1px solid #e4e6ea;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.legend-label { font-size: 11.5px; font-weight: 700; color: #1B365D; margin-right: 4px; }
+.legend-item  { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: #444; }
+.legend-swatch { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
+
+/* ── Summary bar ─────────────────────── */
 .summary-bar {
-    background:#f4f5f7; border-radius:8px; padding:12px 18px;
-    font-size:14px; font-weight:600; color:#1B365D; margin-bottom:12px;
+    background: linear-gradient(135deg, #1B365D, #2c5282);
+    color: white;
+    border-radius: 8px;
+    padding: 13px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    box-shadow: 0 3px 10px rgba(27,54,93,.25);
 }
+.summary-bar span { opacity: .9; margin: 0 8px; }
+
+/* ── Rec card ────────────────────────── */
 .rec-card {
-    background:#eaf4fb; border-left:5px solid #2980b9; border-radius:8px;
-    padding:16px 20px; margin-top:12px;
+    background: linear-gradient(135deg, #eaf4fb, #ddeeff);
+    border-left: 5px solid #2980b9;
+    border-radius: 10px;
+    padding: 18px 22px;
+    margin-top: 10px;
 }
+
+/* ── Section title ───────────────────── */
+.section-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #1B365D;
+    margin: 20px 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ── Buttons ─────────────────────────── */
+div.stButton > button {
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    letter-spacing: .2px !important;
+    transition: transform .15s, box-shadow .15s !important;
+}
+div.stButton > button:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 14px rgba(0,0,0,.18) !important;
+}
+div.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #1B365D, #2c5282) !important;
+    border: none !important;
+    color: white !important;
+}
+
+/* ── Control panel ───────────────────── */
+.ctrl-panel {
+    background: white;
+    border: 1px solid #dfe1e6;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 6px rgba(0,0,0,.05);
+}
+
+/* ── Hist card ───────────────────────── */
 .hist-card {
-    background:#fff; border:1px solid #dfe1e6; border-radius:8px;
-    padding:10px 14px; margin-bottom:8px; cursor:pointer;
+    background: white;
+    border: 1px solid #dfe1e6;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -118,7 +306,7 @@ _DEFAULTS = {
     'cpe_specs': WifrostCPE(),
     'custom_datasheet_nulls': [],
     'history': [],
-    'mode': 'coverage',          # 'coverage' | 'cpe_analysis'
+    'mode': 'coverage',
     'simulation_run': False,
     'active_coverage_grid': None,
     'cpe_results': None,
@@ -136,7 +324,6 @@ for _k, _v in _DEFAULTS.items():
     if _k not in st.session_state:
         st.session_state[_k] = _v
 
-# Load persisted history on first run
 if not st.session_state.history:
     try:
         st.session_state.history = load_history(_BASE)
@@ -156,7 +343,6 @@ def save_keys(ot_key: str, gemini_key: str):
 
 
 def make_sector_polygon(lat, lon, azimuth_deg, hpbw_deg, radius_km=2.5, n_pts=30):
-    """Return [[lat, lon], ...] polygon for a sector wedge."""
     points = [[lat, lon]]
     start = azimuth_deg - hpbw_deg / 2
     end   = azimuth_deg + hpbw_deg / 2
@@ -173,8 +359,18 @@ def _sector_colors():
     return ["#e74c3c", "#3498db", "#2ecc71"]
 
 
+def add_map_controls(m: folium.Map) -> folium.Map:
+    """Add scale bar and measure control to any Folium map."""
+    MeasureControl(
+        position="bottomleft",
+        primary_length_unit="kilometers",
+        secondary_length_unit="miles",
+        primary_area_unit="sqkilometers",
+    ).add_to(m)
+    return m
+
+
 def build_cpe_excel(cpe_results, bts_name, frequency_mhz, model_name, env_name) -> bytes:
-    """Generate 3-sheet Excel for CPE results."""
     df = pd.DataFrame([{
         "Name": r["name"],
         "Distance (km)": r["distance_km"],
@@ -223,21 +419,30 @@ def build_cpe_excel(cpe_results, bts_name, frequency_mhz, model_name, env_name) 
         df_budget.to_excel(writer, sheet_name='Link Budget Details', index=False)
     return buf.getvalue()
 
+
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
-st.sidebar.markdown("<h2 style='color:#1B365D;margin-top:0;'>📡 WiFrost Tool Settings</h2>",
-                    unsafe_allow_html=True)
+st.sidebar.markdown(
+    "<div style='padding:12px 0 4px;'>"
+    "<span style='font-size:20px;font-weight:800;color:#1B365D;letter-spacing:-.3px;'>"
+    "📡 WiFrost</span>"
+    "<span style='font-size:11px;color:#888;font-weight:500;display:block;margin-top:1px;'>"
+    "TVWS Coverage Planner</span></div>",
+    unsafe_allow_html=True)
+
+st.sidebar.markdown("<hr style='margin:8px 0 4px;border-color:#dde1e7;'>", unsafe_allow_html=True)
 
 # API Keys
-with st.sidebar.expander("🔑 API Keys Setup", expanded=False):
+st.sidebar.markdown("<div class='sb-section'>🔑 API Keys</div>", unsafe_allow_html=True)
+with st.sidebar.expander("Configure API Keys", expanded=False):
     st.caption("Saved to local .env file — enter once.")
     ot_key_val  = os.getenv("OPENTOPOGRAPHY_API_KEY", "")
     gem_key_val = os.getenv("GEMINI_API_KEY", "")
-    ot_key_in  = st.text_input("OpenTopography API Key", value=ot_key_val,
+    ot_key_in  = st.text_input("OpenTopography Key", value=ot_key_val,
                                 type="password", key="ot_key_input")
-    gem_key_in = st.text_input("Gemini API Key", value=gem_key_val,
+    gem_key_in = st.text_input("Gemini AI Key", value=gem_key_val,
                                 type="password", key="gem_key_input")
-    if st.button("Save API Keys", use_container_width=True):
+    if st.button("💾 Save Keys", use_container_width=True):
         save_keys(ot_key_in, gem_key_in)
         load_dotenv(env_path, override=True)
 
@@ -245,9 +450,9 @@ ot_api_key     = os.getenv("OPENTOPOGRAPHY_API_KEY", "")
 gemini_api_key = os.getenv("GEMINI_API_KEY", "")
 
 # Project files
-st.sidebar.markdown("### 📁 Project Files")
-kmz_file  = st.sidebar.file_uploader("Drop customer KMZ / KML here", type=["kmz", "kml"])
-xlsx_file = st.sidebar.file_uploader("Or drop Excel with coordinates", type=["xlsx"])
+st.sidebar.markdown("<div class='sb-section'>📁 Project Files</div>", unsafe_allow_html=True)
+kmz_file  = st.sidebar.file_uploader("Drop KMZ / KML", type=["kmz", "kml"])
+xlsx_file = st.sidebar.file_uploader("Or drop Excel (.xlsx)", type=["xlsx"])
 
 parsed_data = None
 file_loaded = False
@@ -286,30 +491,34 @@ elif xlsx_file is not None:
 
 if file_loaded and parsed_data:
     bts_candidates = [s for s in parsed_data.sites if s.is_bts_candidate]
-    st.sidebar.markdown(f"✅ **Loaded {len(parsed_data.sites)} sites**")
-    st.sidebar.caption(f"Found {len(bts_candidates)} candidate BTS sites.")
+    st.sidebar.markdown(
+        f"<div style='background:#e8f5e9;color:#2e7d32;border-radius:6px;"
+        f"padding:8px 12px;font-size:12.5px;font-weight:600;margin:4px 0;'>"
+        f"✅ {len(parsed_data.sites)} sites loaded · {len(bts_candidates)} BTS candidate(s)</div>",
+        unsafe_allow_html=True)
 elif error_message:
     st.sidebar.error(error_message)
 
 # Equipment specs
-st.sidebar.markdown("### 📡 Equipment Specifications")
-equip_tabs = st.sidebar.tabs(["BTS Specs", "CPE Specs", "Upload Datasheet"])
+st.sidebar.markdown("<div class='sb-section'>📡 Equipment</div>", unsafe_allow_html=True)
+equip_tabs = st.sidebar.tabs(["BTS", "CPE", "PDF Import"])
 
 with equip_tabs[0]:
     st.session_state.bts_specs.model_name = st.text_input(
-        "BTS Model Name", value=st.session_state.bts_specs.model_name)
+        "Model Name", value=st.session_state.bts_specs.model_name, key="bts_model_name")
     st.session_state.bts_specs.tx_power_dbm = st.number_input(
-        "BTS TX Power (dBm)", value=st.session_state.bts_specs.tx_power_dbm, step=1.0)
+        "TX Power (dBm)", value=st.session_state.bts_specs.tx_power_dbm, step=1.0, key="bts_tx_power")
     st.session_state.bts_specs.antenna_gain_dbi = st.number_input(
-        "BTS Antenna Gain (dBi)", value=st.session_state.bts_specs.antenna_gain_dbi, step=1.0)
+        "Antenna Gain (dBi)", value=st.session_state.bts_specs.antenna_gain_dbi, step=1.0, key="bts_ant_gain")
     st.session_state.bts_specs.cable_loss_db = st.number_input(
-        "BTS Cable Loss (dB)", value=st.session_state.bts_specs.cable_loss_db, step=0.1)
+        "Cable Loss (dB)", value=st.session_state.bts_specs.cable_loss_db, step=0.1, key="bts_cable_loss")
     st.session_state.bts_specs.receiver_sensitivity_dbm = st.number_input(
-        "BTS RX Sensitivity (dBm)",
-        value=st.session_state.bts_specs.receiver_sensitivity_dbm, step=1.0)
+        "RX Sensitivity (dBm)",
+        value=st.session_state.bts_specs.receiver_sensitivity_dbm, step=1.0, key="bts_rx_sens")
 
-    st.markdown("**🔄 Sector Configuration**")
-    preset = st.selectbox("Sector Preset",
+    st.markdown("<div style='font-size:12px;font-weight:700;color:#1B365D;margin:10px 0 4px;'>"
+                "🔄 Sector Configuration</div>", unsafe_allow_html=True)
+    preset = st.selectbox("Preset",
                           ["3-sector 0/120/240°", "2-sector 0/180°", "Single omni", "Custom"],
                           key="sector_preset")
     if preset == "3-sector 0/120/240°":
@@ -322,47 +531,45 @@ with equip_tabs[0]:
         st.session_state.bts_specs.default_sectors = 1
         st.session_state.bts_specs.sector_azimuths = [0, 120, 240]
 
-    n_sec = st.radio("Number of sectors", [1, 2, 3],
+    n_sec = st.radio("Sectors", [1, 2, 3],
                      index=[1,2,3].index(st.session_state.bts_specs.default_sectors),
                      horizontal=True, key="n_sectors_radio")
     st.session_state.bts_specs.default_sectors = n_sec
 
     for i in range(n_sec):
         default_az = st.session_state.bts_specs.sector_azimuths[i] if i < len(st.session_state.bts_specs.sector_azimuths) else i * (360 // n_sec)
-        az = st.number_input(f"Sector {i+1} Azimuth (°)", min_value=0, max_value=359,
+        az = st.number_input(f"Sector {i+1} Az (°)", min_value=0, max_value=359,
                              value=int(default_az), step=5, key=f"az_{i}")
         st.session_state.bts_specs.sector_azimuths[i] = az
 
     st.session_state.bts_specs.horizontal_beamwidth = st.slider(
-        "Horizontal Beamwidth (°)", 60, 120,
-        int(st.session_state.bts_specs.horizontal_beamwidth), 5)
+        "HPBW (°)", 60, 120, int(st.session_state.bts_specs.horizontal_beamwidth), 5)
     st.session_state.bts_specs.front_to_back_ratio = st.slider(
-        "Front-to-Back Ratio (dB)", 20, 30,
-        int(st.session_state.bts_specs.front_to_back_ratio), 1)
+        "Front-to-Back (dB)", 20, 30, int(st.session_state.bts_specs.front_to_back_ratio), 1)
 
 with equip_tabs[1]:
     st.session_state.cpe_specs.model_name = st.text_input(
-        "CPE Model Name", value=st.session_state.cpe_specs.model_name)
+        "Model Name", value=st.session_state.cpe_specs.model_name, key="cpe_model_name")
     st.session_state.cpe_specs.tx_power_dbm = st.number_input(
-        "CPE TX Power (dBm)", value=st.session_state.cpe_specs.tx_power_dbm, step=1.0)
+        "TX Power (dBm)", value=st.session_state.cpe_specs.tx_power_dbm, step=1.0, key="cpe_tx_power")
     st.session_state.cpe_specs.antenna_gain_dbi = st.number_input(
-        "CPE Antenna Gain (dBi)", value=st.session_state.cpe_specs.antenna_gain_dbi, step=1.0)
+        "Antenna Gain (dBi)", value=st.session_state.cpe_specs.antenna_gain_dbi, step=1.0, key="cpe_ant_gain")
     st.session_state.cpe_specs.cable_loss_db = st.number_input(
-        "CPE Cable Loss (dB)", value=st.session_state.cpe_specs.cable_loss_db, step=0.1)
+        "Cable Loss (dB)", value=st.session_state.cpe_specs.cable_loss_db, step=0.1, key="cpe_cable_loss")
     st.session_state.cpe_specs.receiver_sensitivity_dbm = st.number_input(
-        "CPE RX Sensitivity (dBm)",
-        value=st.session_state.cpe_specs.receiver_sensitivity_dbm, step=1.0)
+        "RX Sensitivity (dBm)",
+        value=st.session_state.cpe_specs.receiver_sensitivity_dbm, step=1.0, key="cpe_rx_sens")
 
 with equip_tabs[2]:
-    st.markdown("**Extract specs from PDF**")
-    custom_pdf = st.file_uploader("Upload PDF Datasheet", type=["pdf"])
+    st.markdown("**Extract specs from a PDF datasheet using Gemini AI**")
+    custom_pdf = st.file_uploader("Upload PDF", type=["pdf"])
     pdf_device_type = st.selectbox("Device Type", ["BTS", "CPE"])
     if custom_pdf is not None:
-        if st.button("Parse PDF Specs", use_container_width=True):
+        if st.button("🤖 Parse with Gemini", use_container_width=True):
             if not gemini_api_key:
-                st.error("🔑 Please set your Gemini API Key first.")
+                st.error("🔑 Set your Gemini API Key first.")
             else:
-                with st.spinner("Extracting with Gemini…"):
+                with st.spinner("Extracting specs…"):
                     try:
                         extracted = extract_equipment_params(
                             custom_pdf.getvalue(), pdf_device_type, gemini_api_key)
@@ -383,29 +590,19 @@ with equip_tabs[2]:
                     except Exception as e:
                         st.error(f"PDF parsing failed: {e}")
 
-if st.sidebar.button("Reset Equipment Defaults", use_container_width=True):
+if st.sidebar.button("↺ Reset Equipment Defaults", use_container_width=True):
     st.session_state.bts_specs = WifrostBTS()
     st.session_state.cpe_specs = WifrostCPE()
     st.session_state.custom_datasheet_nulls = []
     st.rerun()
 
-# Analysis mode toggle
-st.sidebar.markdown("### 🗺️ Analysis Mode")
-mode_choice = st.sidebar.radio(
-    "Select mode",
-    ["🗺 Coverage Map", "📍 CPE Link Analysis"],
-    index=0 if st.session_state.mode == 'coverage' else 1,
-    key="mode_radio",
-)
-st.session_state.mode = 'coverage' if "Coverage" in mode_choice else 'cpe_analysis'
-
 # Simulation settings
-st.sidebar.markdown("### ⚙️ Simulation Settings")
+st.sidebar.markdown("<div class='sb-section-alt'>⚙️ Simulation</div>", unsafe_allow_html=True)
+
 freq_min = min(st.session_state.bts_specs.freq_min_mhz,
                st.session_state.cpe_specs.freq_min_mhz)
 freq_max = max(st.session_state.bts_specs.freq_max_mhz,
                st.session_state.cpe_specs.freq_max_mhz)
-
 if st.session_state.sim_frequency is None:
     st.session_state.sim_frequency = float((freq_min + freq_max) / 2)
 st.session_state.sim_frequency = max(float(freq_min),
@@ -419,7 +616,7 @@ st.session_state.sim_frequency = selected_frequency
 
 model_options = ["Terrain-aware (accurate)", "Flat earth (fast)"]
 model_default_idx = 1 if st.session_state.sim_model == "flat" else 0
-prop_model_ui = st.sidebar.selectbox("Model", model_options,
+prop_model_ui = st.sidebar.selectbox("Propagation Model", model_options,
                                       index=model_default_idx, key="model_sel")
 st.session_state.sim_model = ("terrain_aware"
                                if prop_model_ui == "Terrain-aware (accurate)"
@@ -427,17 +624,26 @@ st.session_state.sim_model = ("terrain_aware"
 prop_model = st.session_state.sim_model
 
 env_options = {"Open / Rural": "open", "Suburban": "suburban", "Urban": "urban"}
-env_ui = st.sidebar.selectbox("Environment",
-                               list(env_options.keys()), key="env_sel")
+env_ui = st.sidebar.selectbox("Environment", list(env_options.keys()), key="env_sel")
 sim_env = env_options[env_ui]
 
 resolution_ui = st.sidebar.selectbox(
-    "Heatmap Spacing", ["Standard 100m", "Fine 50m", "Fast 200m"],
-    key="res_sel")
+    "Grid Spacing", ["Standard 100m", "Fine 50m", "Fast 200m"], key="res_sel")
 resolution_val = 50.0 if "50m" in resolution_ui else (200.0 if "200m" in resolution_ui else 100.0)
 
-# Recent simulations sidebar
-with st.sidebar.expander("📋 Recent Simulations", expanded=False):
+# Analysis mode
+st.sidebar.markdown("<div class='sb-section-alt'>🗺️ Analysis Mode</div>", unsafe_allow_html=True)
+mode_choice = st.sidebar.radio(
+    "Mode",
+    ["🗺 Coverage Map", "📍 CPE Link Analysis"],
+    index=0 if st.session_state.mode == 'coverage' else 1,
+    key="mode_radio",
+)
+st.session_state.mode = 'coverage' if "Coverage" in mode_choice else 'cpe_analysis'
+
+# Recent simulations
+st.sidebar.markdown("<div class='sb-section'>📋 History</div>", unsafe_allow_html=True)
+with st.sidebar.expander("Recent Simulations", expanded=False):
     hist_entries = st.session_state.history
     if not hist_entries:
         st.caption("No simulations saved yet.")
@@ -470,32 +676,54 @@ if file_loaded and parsed_data:
 st.markdown("""
 <div class="main-header">
   <div>
-    <h1>WiFrost TVWS RF Coverage Planning Tool</h1>
-    <p>Interactive tool for sales planning, link budgets, and terrain profile analysis</p>
+    <h1>📡 WiFrost TVWS RF Coverage Planning Tool</h1>
+    <p>Sales planning · Link budgets · Terrain profile analysis · AI-powered recommendations</p>
   </div>
-  <div style="font-weight:700;font-size:16px;border:2px solid white;
-              padding:5px 15px;border-radius:20px;">
-    LATIN AMERICA TVWS RESELLER
-  </div>
+  <div class="header-badge">LATIN AMERICA TVWS RESELLER</div>
 </div>
 """, unsafe_allow_html=True)
 
-# Welcome screen
-if not file_loaded or not parsed_data:
-    st.markdown("""
-### 👋 Welcome, Marcelo!
+# ── Welcome screen ────────────────────────────────────────────────────────────
 
-Get started in 3 simple steps:
-1. **Upload a KMZ/KML file** or an **Excel file** in the sidebar.
-2. Check the WiFrost LT100 specs and sector configuration.
-3. Choose **Coverage Map** or **CPE Link Analysis** mode, then click Run!
-""")
-    col_dl1, col_dl2 = st.columns(2)
+if not file_loaded or not parsed_data:
+    st.markdown(
+        "<div style='font-size:22px;font-weight:700;color:#1B365D;margin-bottom:4px;'>"
+        "👋 Welcome, Marcelo!</div>"
+        "<div style='color:#667;font-size:14px;margin-bottom:24px;'>"
+        "Get started by uploading your project file in the sidebar.</div>",
+        unsafe_allow_html=True)
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown("""
+<div class="welcome-card">
+  <div class="welcome-card-icon">📂</div>
+  <div class="welcome-card-title">Step 1 — Upload Project</div>
+  <div class="welcome-card-text">Drop a KMZ / KML file or an Excel sheet with BTS and CPE coordinates in the sidebar.</div>
+</div>""", unsafe_allow_html=True)
+    with c2:
+        st.markdown("""
+<div class="welcome-card">
+  <div class="welcome-card-icon">⚙️</div>
+  <div class="welcome-card-title">Step 2 — Check Equipment</div>
+  <div class="welcome-card-text">Review the WiFrost LT100 specs, sector azimuths, and frequency in the sidebar, or import from a PDF datasheet.</div>
+</div>""", unsafe_allow_html=True)
+    with c3:
+        st.markdown("""
+<div class="welcome-card">
+  <div class="welcome-card-icon">🚀</div>
+  <div class="welcome-card-title">Step 3 — Run &amp; Analyse</div>
+  <div class="welcome-card-text">Choose Coverage Map or CPE Link Analysis mode, type a question in plain English or Spanish, then click Run.</div>
+</div>""", unsafe_allow_html=True)
+
+    st.markdown("<div style='height:24px;'></div>", unsafe_allow_html=True)
+
+    col_dl1, col_dl2, _ = st.columns([1, 1, 2])
     with col_dl1:
         tpl = os.path.join(sample_dir, "sites_template.xlsx")
         if os.path.exists(tpl):
             with open(tpl, "rb") as f:
-                st.download_button("📄 Download Excel Template", data=f.read(),
+                st.download_button("📄 Excel Template", data=f.read(),
                                    file_name="sites_template.xlsx",
                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                    use_container_width=True)
@@ -503,13 +731,14 @@ Get started in 3 simple steps:
         kmz = os.path.join(sample_dir, "SPRBUN_TVWS.kmz")
         if os.path.exists(kmz):
             with open(kmz, "rb") as f:
-                st.download_button("🌍 Download Sample KMZ", data=f.read(),
+                st.download_button("🌍 Sample KMZ", data=f.read(),
                                    file_name="SPRBUN_TVWS.kmz",
                                    mime="application/vnd.google-earth.kmz",
                                    use_container_width=True)
     st.stop()
 
-# Extract geodata
+# ── Geodata extraction ────────────────────────────────────────────────────────
+
 try:
     sites    = parsed_data.sites
     polygons = parsed_data.polygons
@@ -546,34 +775,32 @@ except Exception:
     from terrain import create_flat_terrain
     terrain_grid = create_flat_terrain(proj_bounds)
 
-col_badge1, _ = st.columns([1, 4])
-with col_badge1:
-    if terrain_grid.is_flat:
-        st.markdown("<span style='background:#ffe39b;color:#856404;padding:4px 10px;"
-                    "border-radius:12px;font-size:12px;font-weight:600;'>"
-                    "⚠️ Running without terrain data</span>", unsafe_allow_html=True)
-    else:
-        st.markdown("<span style='background:#d4edda;color:#155724;padding:4px 10px;"
-                    "border-radius:12px;font-size:12px;font-weight:600;'>"
-                    "🏔 Terrain data loaded</span>", unsafe_allow_html=True)
+# ── Control panel ─────────────────────────────────────────────────────────────
 
-# BTS / height selectors
-st.markdown("### 💬 Ask a Question or Configure Simulation")
+st.markdown("<div class='ctrl-panel'>", unsafe_allow_html=True)
+
+terrain_badge = (
+    "<span class='badge badge-ok'>🏔 Terrain data loaded</span>"
+    if not terrain_grid.is_flat else
+    "<span class='badge badge-warn'>⚠️ No terrain data — flat earth mode</span>"
+)
+st.markdown(terrain_badge, unsafe_allow_html=True)
+st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+
 marcelo_question = st.text_input(
-    "Type your question in English or Spanish:",
-    placeholder="e.g. Compare all sites  OR  Analyse CPE sites at 600 MHz",
+    "💬 Ask a question in English or Spanish:",
+    placeholder="e.g. Compare all sites at 600 MHz  OR  Analyse CPE sites",
     key="question_input")
 
-col_sel1, col_sel2 = st.columns(2)
+col_sel1, col_sel2 = st.columns([3, 1])
 with col_sel1:
     if 'active_bts_index' not in st.session_state or st.session_state.active_bts_index >= len(bts_sites):
         st.session_state.active_bts_index = 0
     selected_bts_ui = st.selectbox(
-        "Select Active Base Station (BTS)",
+        "Active Base Station (BTS)",
         options=range(len(bts_sites)),
         index=st.session_state.active_bts_index,
-        format_func=lambda x: f"{bts_sites[x].name} (Lat:{bts_sites[x].latitude:.5f},"
-                               f" Lon:{bts_sites[x].longitude:.5f})",
+        format_func=lambda x: f"{bts_sites[x].name}  ·  {bts_sites[x].latitude:.5f}°, {bts_sites[x].longitude:.5f}°",
         key="active_bts_sel")
     st.session_state.active_bts_index = selected_bts_ui
     active_bts_site = bts_sites[selected_bts_ui]
@@ -582,17 +809,17 @@ with col_sel2:
     if st.session_state.sim_bts_height is None:
         st.session_state.sim_bts_height = float(active_bts_site.height_m)
     bts_height_ovr = st.number_input(
-        "BTS Antenna Height (m)", min_value=1.0, max_value=200.0,
+        "Ant. Height (m)", min_value=1.0, max_value=200.0,
         value=float(st.session_state.sim_bts_height), step=1.0, key="bts_height_inp")
     st.session_state.sim_bts_height = bts_height_ovr
 
 cpe_sites = [s for s in sites if not s.is_bts_candidate]
 
 # Run buttons
-col_run1, col_run2, col_run3 = st.columns([2, 2, 1])
+col_run1, col_run2, col_run3 = st.columns([5, 5, 3])
 with col_run1:
     if st.session_state.mode == 'coverage':
-        run_sim = st.button("▶ Run Simulation", type="primary", use_container_width=True)
+        run_sim = st.button("▶ Run Coverage Simulation", type="primary", use_container_width=True)
     else:
         run_sim = False
 with col_run2:
@@ -603,13 +830,15 @@ with col_run2:
 with col_run3:
     run_compare = False
     if len(bts_sites) > 1:
-        run_compare = st.button("⚡ Compare All", use_container_width=True)
+        run_compare = st.button("⚡ Compare All Sites", use_container_width=True)
+
+st.markdown("</div>", unsafe_allow_html=True)
 
 # ── AI question parsing ───────────────────────────────────────────────────────
 
 ai_params = None
 if (run_sim or run_cpe or run_compare) and marcelo_question.strip():
-    with st.spinner("🤖 AI interpreting…"):
+    with st.spinner("🤖 Interpreting your question…"):
         try:
             sites_ctx = [{"name": s.name, "lat": s.latitude,
                            "lon": s.longitude, "height_m": s.height_m}
@@ -653,9 +882,8 @@ if run_sim:
         st.session_state.sim_env = sim_env
         st.session_state.sim_bts_height = bts_height_ovr
 
-        # AI recommendation
         if gemini_api_key:
-            with st.spinner("💡 Generating recommendation…"):
+            with st.spinner("💡 Generating AI recommendation…"):
                 try:
                     rec = generate_recommendation({
                         "bts_site": active_bts_site.name,
@@ -672,7 +900,6 @@ if run_sim:
                 except Exception:
                     st.session_state.ai_recommendation = None
 
-        # Save history entry
         try:
             ts = datetime.datetime.now()
             hist_data = {
@@ -705,7 +932,7 @@ if run_sim:
 
 if run_cpe:
     if not cpe_sites:
-        st.warning("No CPE sites found in the project file. Please upload a file with both BTS and CPE points.")
+        st.warning("No CPE sites found. Upload a file with both BTS and CPE points.")
     else:
         try:
             with st.spinner(f"📍 Analysing {len(cpe_sites)} CPE sites…"):
@@ -729,9 +956,8 @@ if run_cpe:
             st.session_state.sim_env = sim_env
             st.session_state.sim_bts_height = bts_height_ovr
 
-            # AI recommendation
             if gemini_api_key:
-                with st.spinner("💡 Generating recommendation…"):
+                with st.spinner("💡 Generating AI recommendation…"):
                     try:
                         covered = [r for r in results if r["rssi_dbm"] >= -90]
                         rec = generate_recommendation({
@@ -749,7 +975,6 @@ if run_cpe:
                     except Exception:
                         st.session_state.ai_recommendation = None
 
-            # Save history
             try:
                 ts = datetime.datetime.now()
                 covered_count = sum(1 for r in results if r["rssi_dbm"] >= -90)
@@ -856,148 +1081,281 @@ if (st.session_state.mode == 'coverage'
 
     # Banner
     if stats['coverage_pct'] >= 85.0:
-        st.markdown(f'<div class="banner-success">✅ <b>{coverage_grid.bts_site.name}'
-                    f' ({st.session_state.sim_bts_height:.1f}m)</b> covers '
-                    f'<b>{stats["coverage_pct"]}%</b> of the desired area. Recommended.</div>',
-                    unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="banner-success">✅ <b>{coverage_grid.bts_site.name}'
+            f' ({st.session_state.sim_bts_height:.1f}m)</b> covers '
+            f'<b>{stats["coverage_pct"]}%</b> of the study area — '
+            f'<b>Recommended</b> for this site.</div>',
+            unsafe_allow_html=True)
     else:
-        st.markdown(f'<div class="banner-warning">⚠️ <b>{coverage_grid.bts_site.name}</b>'
-                    f' only covers <b>{stats["coverage_pct"]}%</b>. '
-                    f'Consider increasing height or choosing another site.</div>',
-                    unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="banner-warning">⚠️ <b>{coverage_grid.bts_site.name}</b>'
+            f' covers only <b>{stats["coverage_pct"]}%</b>. '
+            f'Consider raising height or choosing a different site.</div>',
+            unsafe_allow_html=True)
+
+    # ── Map (full-width, prominent) ───────────────────────────────────────────
+    try:
+        bts_lat = coverage_grid.bts_site.latitude
+        bts_lon = coverage_grid.bts_site.longitude
+        m_heat = folium.Map(
+            location=[bts_lat, bts_lon],
+            zoom_start=13,
+            tiles="CartoDB positron",
+            control_scale=True,
+        )
+        add_map_controls(m_heat)
+
+        # Sector wedges
+        n_sec = st.session_state.bts_specs.default_sectors
+        sec_colors = _sector_colors()
+        if n_sec == 1:
+            folium.Circle(location=[bts_lat, bts_lon],
+                          radius=2500, color='red', fill=True,
+                          fill_opacity=0.08, weight=1).add_to(m_heat)
+        else:
+            azimuths = st.session_state.bts_specs.sector_azimuths[:n_sec]
+            hpbw = st.session_state.bts_specs.horizontal_beamwidth
+            for i, az in enumerate(azimuths):
+                poly_pts = make_sector_polygon(bts_lat, bts_lon, az, hpbw)
+                c = sec_colors[i % len(sec_colors)]
+                folium.Polygon(locations=poly_pts, color=c, weight=1,
+                               fill=True, fill_color=c, fill_opacity=0.18,
+                               tooltip=f"Sector {i+1} ({az}°)").add_to(m_heat)
+
+        for poly in polygons:
+            folium.Polygon(
+                locations=[[c[1], c[0]] for c in poly.coordinates],
+                color="purple", weight=2, fill=True, fill_opacity=0.1,
+            ).add_to(m_heat)
+        for line in lines:
+            folium.PolyLine(
+                locations=[[c[1], c[0]] for c in line.coordinates],
+                color="#2980b9", weight=2.5,
+            ).add_to(m_heat)
+
+        folium.GeoJson(
+            coverage_to_geojson(coverage_grid),
+            style_function=lambda x: {
+                "fillColor": x["properties"]["fill"],
+                "color":     x["properties"]["fill"],
+                "weight": 0,
+                "fillOpacity": x["properties"]["fill-opacity"],
+            },
+            tooltip=folium.GeoJsonTooltip(fields=["rssi"], aliases=["Signal (dBm):"]),
+        ).add_to(m_heat)
+
+        for site in sites:
+            is_active = site.name == coverage_grid.bts_site.name
+            if site.is_bts_candidate:
+                ic, is_ = ("red" if is_active else "orange"), "tower"
+            else:
+                ic, is_ = "cadetblue", "home"
+            folium.Marker(
+                location=[site.latitude, site.longitude],
+                popup=f"<b>{site.name}</b><br>{site.site_type}",
+                tooltip=site.name,
+                icon=folium.Icon(color=ic, icon=is_, prefix="fa"),
+            ).add_to(m_heat)
+
+        st.markdown("<div class='map-wrap'>", unsafe_allow_html=True)
+        st_folium(m_heat, height=520, key="heatmap_map", use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    except Exception as e:
+        st.error(f"Could not render coverage map: {e}")
+
+    # Signal legend
+    st.markdown("""
+<div class="legend-bar">
+  <span class="legend-label">Signal Quality:</span>
+  <div class="legend-item"><div class="legend-swatch" style="background:#2ecc71;"></div>Excellent (≥ -65 dBm)</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#27ae60;"></div>Good (-65 to -75)</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#f1c40f;"></div>Marginal (-75 to -85)</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#e74c3c;"></div>Weak (-85 to -90)</div>
+  <div class="legend-item" style="margin-left:auto;color:#888;font-size:11px;">Use the ruler tool (bottom-left) to measure distances</div>
+</div>""", unsafe_allow_html=True)
 
     # KPI cards
     st.markdown(f"""
-<div class="kpi-container">
-  <div class="kpi-card"><div class="kpi-title">Coverage Area</div>
-    <div class="kpi-value">{stats['coverage_pct']}%</div></div>
-  <div class="kpi-card"><div class="kpi-title">Good Signal</div>
-    <div class="kpi-value">{stats['good_pct']}%</div></div>
-  <div class="kpi-card"><div class="kpi-title">Avg RSSI (Covered)</div>
-    <div class="kpi-value">{stats['avg_rssi']} dBm</div></div>
-  <div class="kpi-card"><div class="kpi-title">Max Covered Range</div>
-    <div class="kpi-value">{stats['max_range_km']} km</div></div>
+<div class="kpi-row">
+  <div class="kpi-card c1">
+    <div class="kpi-title">Coverage Area</div>
+    <div class="kpi-value">{stats['coverage_pct']}%</div>
+  </div>
+  <div class="kpi-card c2">
+    <div class="kpi-title">Good Signal (≥ -75 dBm)</div>
+    <div class="kpi-value">{stats['good_pct']}%</div>
+  </div>
+  <div class="kpi-card c3">
+    <div class="kpi-title">Avg RSSI (Covered)</div>
+    <div class="kpi-value">{stats['avg_rssi']} dBm</div>
+  </div>
+  <div class="kpi-card c4">
+    <div class="kpi-title">Max Covered Range</div>
+    <div class="kpi-value">{stats['max_range_km']} km</div>
+  </div>
 </div>""", unsafe_allow_html=True)
 
-    result_tabs = st.tabs(["🗺 Coverage Heatmap", "🏔 Terrain & Comparisons",
-                            "📡 Client CPE List"])
+    # Secondary tabs
+    result_tabs = st.tabs(["📄 Report & Downloads", "🏔 Terrain Profile",
+                            "⚡ Site Comparison", "📡 CPE Site List"])
 
     with result_tabs[0]:
         try:
-            bts_lat = coverage_grid.bts_site.latitude
-            bts_lon = coverage_grid.bts_site.longitude
-            m_heat = folium.Map(location=[bts_lat, bts_lon],
-                                zoom_start=13, tiles="OpenStreetMap")
-
-            # Sector wedges
-            n_sec = st.session_state.bts_specs.default_sectors
-            sec_colors = _sector_colors()
-            if n_sec == 1:
-                folium.Circle(location=[bts_lat, bts_lon],
-                              radius=2500, color='red', fill=True,
-                              fill_opacity=0.08, weight=1).add_to(m_heat)
+            edge_dist_km = max(0.5, stats["max_range_km"])
+            bts_specs = st.session_state.bts_specs
+            cpe_specs = st.session_state.cpe_specs
+            eirp = compute_eirp(bts_specs.tx_power_dbm, bts_specs.antenna_gain_dbi,
+                                 bts_specs.cable_loss_db)
+            if st.session_state.sim_model == 'terrain_aware' and not terrain_grid.is_flat:
+                edge_loss, _, _ = terrain_aware_loss(
+                    coverage_grid.bts_site.latitude, coverage_grid.bts_site.longitude,
+                    st.session_state.sim_bts_height,
+                    coverage_grid.bts_site.latitude + 0.02,
+                    coverage_grid.bts_site.longitude + 0.02,
+                    cpe_specs.antenna_height_default_m,
+                    st.session_state.sim_frequency, terrain_grid, st.session_state.sim_env)
             else:
-                azimuths = st.session_state.bts_specs.sector_azimuths[:n_sec]
-                hpbw = st.session_state.bts_specs.horizontal_beamwidth
-                for i, az in enumerate(azimuths):
-                    poly_pts = make_sector_polygon(bts_lat, bts_lon, az, hpbw)
-                    c = sec_colors[i % len(sec_colors)]
-                    folium.Polygon(locations=poly_pts, color=c, weight=1,
-                                   fill=True, fill_color=c,
-                                   fill_opacity=0.18,
-                                   tooltip=f"Sector {i+1} ({az}°)").add_to(m_heat)
+                edge_loss = okumura_hata(edge_dist_km, st.session_state.sim_frequency,
+                                         st.session_state.sim_bts_height,
+                                         cpe_specs.antenna_height_default_m,
+                                         st.session_state.sim_env)
+            edge_rssi   = compute_rssi(edge_loss, eirp,
+                                        cpe_specs.antenna_gain_dbi, cpe_specs.cable_loss_db)
+            edge_margin = edge_rssi - cpe_specs.receiver_sensitivity_dbm
+            rec_text = (f"Coverage {stats['coverage_pct']}% at "
+                        f"{st.session_state.sim_frequency:.1f} MHz. "
+                        f"Link margin at edge: {edge_margin:.1f} dB.")
+            if edge_margin < 6:
+                rec_text += " WARNING: Link margin is critical. Field surveys recommended."
 
-            for poly in polygons:
-                folium.Polygon(
-                    locations=[[c[1], c[0]] for c in poly.coordinates],
-                    color="purple", weight=2, fill=True, fill_opacity=0.1
-                ).add_to(m_heat)
-            for line in lines:
-                folium.PolyLine(
-                    locations=[[c[1], c[0]] for c in line.coordinates],
-                    color="blue", weight=3
-                ).add_to(m_heat)
+            pdf_buf = BytesIO()
+            generate_pdf_report(
+                output_stream=pdf_buf,
+                project_name=f"TVWS Coverage — {coverage_grid.bts_site.name}",
+                prepared_by="Marcelo (WiFrost Sales Eng)",
+                coverage_grid=coverage_grid,
+                equipment_bts=bts_specs,
+                equipment_cpe=cpe_specs,
+                model_name="Terrain-Aware Hata" if st.session_state.sim_model == 'terrain_aware' else "Flat Hata",
+                environment=st.session_state.sim_env,
+                edge_loss_db=edge_loss,
+                edge_rssi_dbm=edge_rssi,
+                edge_margin_db=edge_margin,
+                conclusion_text=rec_text,
+                all_sites_comparison=None,
+            )
 
-            folium.GeoJson(
-                coverage_to_geojson(coverage_grid),
-                style_function=lambda x: {
-                    "fillColor": x["properties"]["fill"],
-                    "color":     x["properties"]["fill"],
-                    "weight": 0,
-                    "fillOpacity": x["properties"]["fill-opacity"],
-                },
-                tooltip=folium.GeoJsonTooltip(
-                    fields=["rssi"], aliases=["Signal RSSI (dBm):"]),
-            ).add_to(m_heat)
-
-            for site in sites:
-                is_active = site.name == coverage_grid.bts_site.name
-                if site.is_bts_candidate:
-                    ic, is_ = ("red" if is_active else "orange"), "tower"
-                else:
-                    ic, is_ = "cadetblue", "home"
-                folium.Marker(
-                    location=[site.latitude, site.longitude],
-                    popup=f"<b>{site.name}</b><br>{site.site_type}",
-                    tooltip=site.name,
-                    icon=folium.Icon(color=ic, icon=is_, prefix="fa"),
-                ).add_to(m_heat)
-
-            st.markdown("""
-<div class="legend-container">
-  <span style="font-weight:700;color:#1B365D;font-size:13px;margin-right:10px;">Signal Bands:</span>
-  <div class="legend-item"><div class="legend-dot" style="background:#2ecc71;"></div> Excellent (≥ -65 dBm)</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#27ae60;"></div> Good (-65 to -75 dBm)</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#f1c40f;"></div> Marginal (-75 to -85 dBm)</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#e74c3c;"></div> Weak (-85 to -90 dBm)</div>
-</div>""", unsafe_allow_html=True)
-
-            st_folium(m_heat, height=450, key="heatmap_map", use_container_width=True)
+            col_pdf, col_cmp = st.columns(2)
+            with col_pdf:
+                st.download_button(
+                    "📄 Download PDF Report",
+                    data=pdf_buf.getvalue(),
+                    file_name=f"WiFrost_{coverage_grid.bts_site.name.replace(' ','_')}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+            with col_cmp:
+                if len(bts_sites) > 1:
+                    if st.button("🔄 Compare All Candidate Sites", use_container_width=True):
+                        st.session_state.question_input = "Compare all sites"
+                        st.rerun()
         except Exception as e:
-            st.error(f"Could not render coverage map: {e}")
+            st.error(f"Could not generate PDF report: {e}")
 
     with result_tabs[1]:
-        col_t1, col_t2 = st.columns(2)
-        with col_t1:
-            st.markdown("#### 🏔 Terrain Profile")
-            if terrain_grid.is_flat:
-                st.info("Flat earth model — no terrain profile available.")
-            else:
-                try:
-                    target = (cpe_sites[0] if cpe_sites
-                              else KMLPoint("Edge", min_lat, min_lon))
-                    fig, lbl = build_terrain_profile_figure(
-                        terrain_grid,
-                        coverage_grid.bts_site.latitude,
-                        coverage_grid.bts_site.longitude,
-                        st.session_state.sim_bts_height,
-                        target.latitude, target.longitude,
-                        target.height_m,
-                        st.session_state.sim_frequency,
-                        cpe_name=target.name,
-                    )
-                    if fig:
-                        st.caption(f"{lbl} — Profile to {target.name}")
-                        st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        st.info(lbl)
-                except Exception as e:
-                    st.warning(f"Terrain profile error: {e}")
-        with col_t2:
-            st.markdown("#### 📊 Site Comparison")
-            if st.session_state.all_compares:
-                rows = []
-                for name, res in st.session_state.all_compares.items():
-                    cov = sum(1 for r in res if r["rssi_dbm"] >= -90)
-                    rows.append({"Site": name,
-                                 "Covered": cov,
-                                 "Coverage %": f"{100*cov/max(len(res),1):.1f}%"})
-                st.dataframe(pd.DataFrame(rows), use_container_width=True)
-            else:
-                st.caption("Click ⚡ Compare All to populate this table.")
+        if terrain_grid.is_flat:
+            st.info("Flat earth model active — no terrain profile available. "
+                    "Add an OpenTopography API key to enable SRTM terrain data.")
+        else:
+            try:
+                target = (cpe_sites[0] if cpe_sites
+                          else KMLPoint("Edge", min_lat, min_lon))
+                fig, lbl = build_terrain_profile_figure(
+                    terrain_grid,
+                    coverage_grid.bts_site.latitude,
+                    coverage_grid.bts_site.longitude,
+                    st.session_state.sim_bts_height,
+                    target.latitude, target.longitude,
+                    target.height_m,
+                    st.session_state.sim_frequency,
+                    cpe_name=target.name,
+                )
+                if fig:
+                    st.caption(f"{lbl} — Profile to **{target.name}**")
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info(lbl)
+            except Exception as e:
+                st.warning(f"Terrain profile error: {e}")
 
     with result_tabs[2]:
-        st.markdown("#### 📡 Client CPE Coverage List")
+        if st.session_state.all_compares:
+            comp = st.session_state.all_compares
+            bts_names = list(comp.keys())
+            cpe_name_set = [r['name'] for r in next(iter(comp.values()))]
+            try:
+                rows = []
+                for cpe_n in cpe_name_set:
+                    row = {"CPE": cpe_n}
+                    best_rssi, best_site = -999, ""
+                    for bts_n, res in comp.items():
+                        match = next((r for r in res if r['name'] == cpe_n), None)
+                        v = match['rssi_dbm'] if match else -999
+                        row[bts_n] = v
+                        if v > best_rssi:
+                            best_rssi, best_site = v, bts_n
+                    rssis = sorted([row[b] for b in bts_names], reverse=True)
+                    row["Best Site ★"] = best_site
+                    row["Margin Adv (dB)"] = round(rssis[0] - rssis[1], 1) if len(rssis) > 1 else 0
+                    rows.append(row)
+
+                df_comp = pd.DataFrame(rows)
+                totals = {"CPE": "✅ Covered / Total"}
+                for bts_n, res in comp.items():
+                    cov = sum(1 for r in res if r['rssi_dbm'] >= -90)
+                    totals[bts_n] = f"{cov}/{len(res)}"
+                totals["Best Site ★"] = ""
+                totals["Margin Adv (dB)"] = ""
+                df_comp = pd.concat([df_comp, pd.DataFrame([totals])], ignore_index=True)
+                st.dataframe(df_comp, use_container_width=True, height=300)
+
+                # Stacked bar chart
+                fig_bar = go.Figure()
+                status_labels = ["🟢 Excellent", "🟡 Good", "🟠 Marginal", "🔴 Weak"]
+                bar_colors    = ["#27ae60", "#3498db", "#e67e22", "#e74c3c"]
+                for stat, color in zip(status_labels, bar_colors):
+                    counts = []
+                    for bts_n, res in comp.items():
+                        if stat == "🟢 Excellent":
+                            counts.append(sum(1 for r in res if r['rssi_dbm'] >= -65))
+                        elif stat == "🟡 Good":
+                            counts.append(sum(1 for r in res if -75 <= r['rssi_dbm'] < -65))
+                        elif stat == "🟠 Marginal":
+                            counts.append(sum(1 for r in res if -85 <= r['rssi_dbm'] < -75))
+                        else:
+                            counts.append(sum(1 for r in res if -90 <= r['rssi_dbm'] < -85))
+                    fig_bar.add_trace(go.Bar(name=stat, x=bts_names, y=counts,
+                                             marker_color=color))
+                fig_bar.update_layout(
+                    barmode='stack',
+                    title="CPE Coverage by Signal Quality per BTS Site",
+                    xaxis_title="BTS Candidate",
+                    yaxis_title="Number of CPE Sites",
+                    height=320,
+                    margin=dict(l=50, r=20, t=40, b=40),
+                    legend=dict(orientation="h", y=-0.3),
+                    plot_bgcolor='rgba(248,249,250,1)',
+                    paper_bgcolor='white',
+                )
+                st.plotly_chart(fig_bar, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Comparison error: {e}")
+        else:
+            st.info("Click **⚡ Compare All Sites** to run a parallel comparison across all BTS candidates.")
+
+    with result_tabs[3]:
         if cpe_sites:
             try:
                 eirp = compute_eirp(st.session_state.bts_specs.tx_power_dbm,
@@ -1051,69 +1409,6 @@ if (st.session_state.mode == 'coverage'
         else:
             st.info("No CPE sites found. Upload a file with both BTS and CPE points.")
 
-    # PDF report
-    try:
-        st.markdown("---")
-        edge_dist_km = max(0.5, stats["max_range_km"])
-        bts_specs = st.session_state.bts_specs
-        cpe_specs = st.session_state.cpe_specs
-        eirp = compute_eirp(bts_specs.tx_power_dbm, bts_specs.antenna_gain_dbi,
-                             bts_specs.cable_loss_db)
-        if st.session_state.sim_model == 'terrain_aware' and not terrain_grid.is_flat:
-            edge_loss, _, _ = terrain_aware_loss(
-                coverage_grid.bts_site.latitude, coverage_grid.bts_site.longitude,
-                st.session_state.sim_bts_height,
-                coverage_grid.bts_site.latitude + 0.02,
-                coverage_grid.bts_site.longitude + 0.02,
-                cpe_specs.antenna_height_default_m,
-                st.session_state.sim_frequency, terrain_grid, st.session_state.sim_env)
-        else:
-            edge_loss = okumura_hata(edge_dist_km, st.session_state.sim_frequency,
-                                     st.session_state.sim_bts_height,
-                                     cpe_specs.antenna_height_default_m,
-                                     st.session_state.sim_env)
-        edge_rssi   = compute_rssi(edge_loss, eirp,
-                                    cpe_specs.antenna_gain_dbi, cpe_specs.cable_loss_db)
-        edge_margin = edge_rssi - cpe_specs.receiver_sensitivity_dbm
-        rec_text = (f"Coverage {stats['coverage_pct']}% at {st.session_state.sim_frequency:.1f} MHz. "
-                    f"Link margin at edge: {edge_margin:.1f} dB.")
-        if edge_margin < 6:
-            rec_text += " WARNING: Link margin is critical. Field surveys recommended."
-
-        pdf_buf = BytesIO()
-        generate_pdf_report(
-            output_stream=pdf_buf,
-            project_name=f"TVWS Coverage — {coverage_grid.bts_site.name}",
-            prepared_by="Marcelo (WiFrost Sales Eng)",
-            coverage_grid=coverage_grid,
-            equipment_bts=bts_specs,
-            equipment_cpe=cpe_specs,
-            model_name="Terrain-Aware Hata" if st.session_state.sim_model == 'terrain_aware' else "Flat Hata",
-            environment=st.session_state.sim_env,
-            edge_loss_db=edge_loss,
-            edge_rssi_dbm=edge_rssi,
-            edge_margin_db=edge_margin,
-            conclusion_text=rec_text,
-            all_sites_comparison=None,
-        )
-
-        col_pdf, col_cmp = st.columns(2)
-        with col_pdf:
-            st.download_button(
-                "📄 Download PDF Report",
-                data=pdf_buf.getvalue(),
-                file_name=f"WiFrost_{coverage_grid.bts_site.name.replace(' ','_')}.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-            )
-        with col_cmp:
-            if len(bts_sites) > 1:
-                if st.button("🔄 Compare All Candidate Sites", use_container_width=True):
-                    st.session_state.question_input = "Compare all sites"
-                    st.rerun()
-    except Exception as e:
-        st.error(f"Could not generate PDF report: {e}")
-
 # ── CPE analysis mode ─────────────────────────────────────────────────────────
 
 elif (st.session_state.mode == 'cpe_analysis'
@@ -1121,7 +1416,6 @@ elif (st.session_state.mode == 'cpe_analysis'
 
     results = st.session_state.cpe_results
 
-    # Summary bar
     total   = len(results)
     exc     = sum(1 for r in results if r["rssi_dbm"] >= -65)
     good    = sum(1 for r in results if -75 <= r["rssi_dbm"] < -65)
@@ -1129,22 +1423,29 @@ elif (st.session_state.mode == 'cpe_analysis'
     weak    = sum(1 for r in results if -90 <= r["rssi_dbm"] < -85)
     nolink  = sum(1 for r in results if r["rssi_dbm"] < -90)
     covered = exc + good + marg + weak
+
     st.markdown(
         f'<div class="summary-bar">'
-        f'📡 <b>{covered} of {total} CPE sites covered</b> &nbsp;|&nbsp; '
-        f'🟢 {exc} Excellent &nbsp;|&nbsp; 🟡 {good} Good &nbsp;|&nbsp; '
-        f'🟠 {marg} Marginal &nbsp;|&nbsp; 🔴 {weak} Weak &nbsp;|&nbsp; '
-        f'⛔ {nolink} No Link'
+        f'📡 <b>{covered} of {total} CPE sites covered</b>'
+        f'<span>·</span>🟢 {exc} Excellent'
+        f'<span>·</span>🟡 {good} Good'
+        f'<span>·</span>🟠 {marg} Marginal'
+        f'<span>·</span>🔴 {weak} Weak'
+        f'<span>·</span>⛔ {nolink} No Link'
         f'</div>', unsafe_allow_html=True)
 
     # Map
     try:
         bts_lat = active_bts_site.latitude
         bts_lon = active_bts_site.longitude
-        m_cpe = folium.Map(location=[bts_lat, bts_lon],
-                           zoom_start=13, tiles="OpenStreetMap")
+        m_cpe = folium.Map(
+            location=[bts_lat, bts_lon],
+            zoom_start=13,
+            tiles="CartoDB positron",
+            control_scale=True,
+        )
+        add_map_controls(m_cpe)
 
-        # Sector wedges
         n_sec = st.session_state.bts_specs.default_sectors
         sec_colors = _sector_colors()
         if n_sec == 1:
@@ -1160,7 +1461,6 @@ elif (st.session_state.mode == 'cpe_analysis'
                                fill=True, fill_color=c, fill_opacity=0.18,
                                tooltip=f"Sector {i+1} ({az}°)").add_to(m_cpe)
 
-        # BTS marker
         folium.Marker(
             location=[bts_lat, bts_lon],
             popup=f"<b>BTS: {active_bts_site.name}</b>",
@@ -1168,17 +1468,16 @@ elif (st.session_state.mode == 'cpe_analysis'
             icon=folium.Icon(color='red', icon='tower', prefix='fa'),
         ).add_to(m_cpe)
 
-        # CPE markers + lines
         for r in results:
             popup_html = (
                 f"<b>{r['name']}</b><br>"
                 f"Distance: {r['distance_km']} km &nbsp; Bearing: {r['bearing_deg']}°<br>"
-                f"Sector: {r['best_sector']+1} &nbsp; Sector Gain: {r['sector_gain_db']} dB<br>"
+                f"Sector: {r['best_sector']+1} &nbsp; Gain: {r['sector_gain_db']} dB<br>"
                 f"Path Loss: {r['terrain_loss_db']} dB<br>"
                 f"<b>RSSI: {r['rssi_dbm']} dBm</b><br>"
                 f"Link Margin: {r['link_margin_db']} dB<br>"
                 f"LoS: {r['fresnel_clearance']}<br>"
-                f"Status: {r['status']}"
+                f"<b>{r['status']}</b>"
             )
             folium.Marker(
                 location=[r['lat'], r['lon']],
@@ -1191,9 +1490,21 @@ elif (st.session_state.mode == 'cpe_analysis'
                 color=r['line_color'], weight=1.5, opacity=0.7,
             ).add_to(m_cpe)
 
-        map_data = st_folium(m_cpe, height=420, key="cpe_map", use_container_width=True)
+        st.markdown("<div class='map-wrap'>", unsafe_allow_html=True)
+        map_data = st_folium(m_cpe, height=500, key="cpe_map", use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        # Detect clicked CPE
+        st.markdown("""
+<div class="legend-bar">
+  <span class="legend-label">CPE Status:</span>
+  <div class="legend-item"><div class="legend-swatch" style="background:#27ae60;"></div>Excellent (≥ -65)</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#f39c12;"></div>Good (-65 to -75)</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#e67e22;"></div>Marginal (-75 to -85)</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#e74c3c;"></div>Weak (-85 to -90)</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#95a5a6;"></div>No Link</div>
+  <div class="legend-item" style="margin-left:auto;color:#888;font-size:11px;">Click a marker for full link budget · Ruler tool bottom-left</div>
+</div>""", unsafe_allow_html=True)
+
         try:
             clicked = map_data.get("last_object_clicked_popup") or ""
             if clicked:
@@ -1220,10 +1531,9 @@ elif (st.session_state.mode == 'cpe_analysis'
             "Status": r["status"],
         } for i, r in enumerate(results)])
 
-        # Row selection via selectbox for terrain cross-section
         cpe_names = [r['name'] for r in results]
         sel_name = st.selectbox(
-            "Select CPE for terrain cross-section ↓",
+            "Select CPE to view terrain cross-section ↓",
             options=["— none —"] + cpe_names,
             index=0, key="cpe_select_box")
         if sel_name != "— none —":
@@ -1231,7 +1541,6 @@ elif (st.session_state.mode == 'cpe_analysis'
 
         st.dataframe(df_results, use_container_width=True, height=280)
 
-        # Download
         try:
             xl_bytes = build_cpe_excel(
                 results, active_bts_site.name,
@@ -1249,12 +1558,12 @@ elif (st.session_state.mode == 'cpe_analysis'
     except Exception as e:
         st.error(f"Could not build results table: {e}")
 
-    # Terrain cross-section (Part 6)
+    # Terrain cross-section
     sel = st.session_state.selected_cpe_name
     if sel:
         sel_r = next((r for r in results if r['name'] == sel), None)
         if sel_r:
-            with st.expander(f"📊 Terrain profile — {sel}", expanded=True):
+            with st.expander(f"🏔 Terrain cross-section — {sel}", expanded=True):
                 try:
                     fig, lbl = build_terrain_profile_figure(
                         terrain_grid,
@@ -1273,39 +1582,34 @@ elif (st.session_state.mode == 'cpe_analysis'
                 except Exception as e:
                     st.warning(f"Terrain profile error: {e}")
 
-# ── Compare all sites (Part 5) ────────────────────────────────────────────────
+# ── Compare all sites (standalone section) ────────────────────────────────────
 
 if st.session_state.all_compares:
     st.markdown("---")
-    st.markdown("### ⚡ Compare All BTS Candidate Sites")
+    st.markdown("<div class='section-title'>⚡ Compare All BTS Candidate Sites</div>",
+                unsafe_allow_html=True)
 
     comp = st.session_state.all_compares
     bts_names = list(comp.keys())
     cpe_name_set = [r['name'] for r in next(iter(comp.values()))]
 
-    # Per-CPE comparison table
     try:
         rows = []
         for cpe_n in cpe_name_set:
             row = {"CPE": cpe_n}
-            best_rssi = -999
-            best_site = ""
+            best_rssi, best_site = -999, ""
             for bts_n, res in comp.items():
                 match = next((r for r in res if r['name'] == cpe_n), None)
                 v = match['rssi_dbm'] if match else -999
                 row[bts_n] = v
                 if v > best_rssi:
-                    best_rssi = v
-                    best_site = bts_n
-            # Advantage over second-best
+                    best_rssi, best_site = v, bts_n
             rssis = sorted([row[b] for b in bts_names], reverse=True)
             row["Best Site ★"] = best_site
             row["Margin Adv (dB)"] = round(rssis[0] - rssis[1], 1) if len(rssis) > 1 else 0
             rows.append(row)
 
         df_comp = pd.DataFrame(rows)
-
-        # Totals row
         totals = {"CPE": "✅ Covered / Total"}
         for bts_n, res in comp.items():
             cov = sum(1 for r in res if r['rssi_dbm'] >= -90)
@@ -1313,17 +1617,14 @@ if st.session_state.all_compares:
         totals["Best Site ★"] = ""
         totals["Margin Adv (dB)"] = ""
         df_comp = pd.concat([df_comp, pd.DataFrame([totals])], ignore_index=True)
-
         st.dataframe(df_comp, use_container_width=True, height=300)
     except Exception as e:
         st.warning(f"Comparison table error: {e}")
 
-    # Plotly stacked bar chart
     try:
         fig_bar = go.Figure()
         status_labels = ["🟢 Excellent", "🟡 Good", "🟠 Marginal", "🔴 Weak"]
-        bar_colors    = ["#27ae60", "#f39c12", "#e67e22", "#e74c3c"]
-
+        bar_colors    = ["#27ae60", "#3498db", "#e67e22", "#e74c3c"]
         for stat, color in zip(status_labels, bar_colors):
             counts = []
             for bts_n, res in comp.items():
@@ -1335,31 +1636,28 @@ if st.session_state.all_compares:
                     counts.append(sum(1 for r in res if -85 <= r['rssi_dbm'] < -75))
                 else:
                     counts.append(sum(1 for r in res if -90 <= r['rssi_dbm'] < -85))
-            fig_bar.add_trace(go.Bar(
-                name=stat,
-                x=bts_names,
-                y=counts,
-                marker_color=color,
-            ))
-
+            fig_bar.add_trace(go.Bar(name=stat, x=bts_names, y=counts,
+                                     marker_color=color))
         fig_bar.update_layout(
             barmode='stack',
-            title="CPE Site Coverage by Signal Quality",
-            xaxis_title="BTS Candidate Site",
+            title="CPE Coverage by Signal Quality per BTS Site",
+            xaxis_title="BTS Candidate",
             yaxis_title="Number of CPE Sites",
             height=320,
             margin=dict(l=50, r=20, t=40, b=40),
-            legend=dict(orientation="h", y=-0.25),
+            legend=dict(orientation="h", y=-0.3),
+            plot_bgcolor='rgba(248,249,250,1)',
+            paper_bgcolor='white',
         )
         st.plotly_chart(fig_bar, use_container_width=True)
     except Exception as e:
         st.warning(f"Comparison chart error: {e}")
 
-# ── AI recommendation (Part 4) ────────────────────────────────────────────────
+# ── AI recommendation ─────────────────────────────────────────────────────────
 
 rec = st.session_state.ai_recommendation
 if rec and (rec.get("english") or rec.get("spanish")):
-    with st.expander("💡 Recommendation for customer proposal", expanded=False):
+    with st.expander("💡 AI Recommendation for Customer Proposal", expanded=False):
         st.markdown('<div class="rec-card">', unsafe_allow_html=True)
         if rec.get("english"):
             st.markdown("**English**")
