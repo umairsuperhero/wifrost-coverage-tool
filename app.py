@@ -400,6 +400,7 @@ _DEFAULTS = {
     'sim_model': 'terrain_aware',
     'sim_env': 'open',
     'sim_bts_height': 30.0,
+    'system_margin_db': 18.0,
     'selected_cpe_name': None,
     'ai_recommendation': None,
     'loaded_past': None,
@@ -707,13 +708,27 @@ st.session_state.sim_model = ("terrain_aware"
                                else "flat")
 prop_model = st.session_state.sim_model
 
-env_options = {"Open / Rural": "open", "Suburban": "suburban", "Urban": "urban"}
+env_options = {
+    "Open / Rural": "open",
+    "Open Water / Bay": "open_water",
+    "Port / Industrial": "port_industrial",
+    "Suburban": "suburban",
+    "Vegetation (Light)": "vegetation_light",
+    "Vegetation (Dense)": "vegetation_dense",
+    "Urban": "urban",
+}
 env_ui = st.sidebar.selectbox("Environment", list(env_options.keys()), key="env_sel")
 sim_env = env_options[env_ui]
 
 resolution_ui = st.sidebar.selectbox(
     "Grid Spacing", ["Standard 100m", "Fine 50m", "Fast 200m"], key="res_sel")
 resolution_val = 50.0 if "50m" in resolution_ui else (200.0 if "200m" in resolution_ui else 100.0)
+
+system_margin_db = st.sidebar.slider(
+    "System Margin (dB)", min_value=10, max_value=25,
+    value=int(st.session_state.system_margin_db), step=1, key="sys_margin_slider",
+    help="Fade (10) + body/install (3) + cable aging (2) + interference (3) = 18 dB default")
+st.session_state.system_margin_db = float(system_margin_db)
 
 # Analysis mode
 sidebar_section("Analysis Mode", "🗺️")
@@ -1053,6 +1068,7 @@ if run_cpe:
                     model=prop_model,
                     environment=sim_env,
                     bts_height_override=bts_height_ovr,
+                    system_margin_db=system_margin_db,
                 )
             st.session_state.cpe_results = results
             st.session_state.active_coverage_grid = None
@@ -1066,7 +1082,7 @@ if run_cpe:
             if gemini_api_key:
                 with st.spinner("💡 Generating AI recommendation…"):
                     try:
-                        covered = [r for r in results if r["rssi_dbm"] >= -90]
+                        covered = [r for r in results if r["rssi_dbm"] >= -85]
                         rec = generate_recommendation({
                             "bts_site": active_bts_site.name,
                             "frequency_mhz": selected_frequency,
@@ -1075,8 +1091,7 @@ if run_cpe:
                             "excellent": sum(1 for r in results if r["rssi_dbm"] >= -65),
                             "good": sum(1 for r in results if -75 <= r["rssi_dbm"] < -65),
                             "marginal": sum(1 for r in results if -85 <= r["rssi_dbm"] < -75),
-                            "weak": sum(1 for r in results if -90 <= r["rssi_dbm"] < -85),
-                            "no_link": sum(1 for r in results if r["rssi_dbm"] < -90),
+                            "no_link": sum(1 for r in results if r["rssi_dbm"] < -85),
                         }, gemini_api_key)
                         st.session_state.ai_recommendation = rec
                     except Exception:
@@ -1084,7 +1099,7 @@ if run_cpe:
 
             try:
                 ts = datetime.datetime.now()
-                covered_count = sum(1 for r in results if r["rssi_dbm"] >= -90)
+                covered_count = sum(1 for r in results if r["rssi_dbm"] >= -85)
                 hist_data = {
                     "timestamp": ts.isoformat(),
                     "project_name": "CPE Analysis",
@@ -1130,6 +1145,7 @@ if run_compare:
                         model=prop_model,
                         environment=sim_env,
                         bts_height_override=bts_height_ovr,
+                        system_margin_db=system_margin_db,
                     )
 
                 with ThreadPoolExecutor(max_workers=min(len(bts_sites), 4)) as ex:
@@ -1279,8 +1295,8 @@ if (st.session_state.mode == 'coverage'
   <div class="legend-item"><div class="legend-swatch" style="background:#2ecc71;"></div>Excellent (≥ -65 dBm)</div>
   <div class="legend-item"><div class="legend-swatch" style="background:#27ae60;"></div>Good (-65 to -75)</div>
   <div class="legend-item"><div class="legend-swatch" style="background:#f1c40f;"></div>Marginal (-75 to -85)</div>
-  <div class="legend-item"><div class="legend-swatch" style="background:#e74c3c;"></div>Weak (-85 to -90)</div>
-  <div class="legend-item" style="margin-left:auto;color:#888;font-size:11px;">Use the ruler tool (bottom-left) to measure distances</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#475569;border:1px solid #64748B;"></div>Below threshold (&lt; -85)</div>
+  <div class="legend-item" style="margin-left:auto;color:#888;font-size:11px;">Realistic scenario · ruler tool at bottom-left</div>
 </div>""", unsafe_allow_html=True)
 
     # KPI cards
@@ -1315,27 +1331,34 @@ if (st.session_state.mode == 'coverage'
             cpe_specs = st.session_state.cpe_specs
             eirp = compute_eirp(bts_specs.tx_power_dbm, bts_specs.antenna_gain_dbi,
                                  bts_specs.cable_loss_db)
-            if st.session_state.sim_model == 'terrain_aware' and not terrain_grid.is_flat:
-                edge_loss, _, _ = terrain_aware_loss(
-                    coverage_grid.bts_site.latitude, coverage_grid.bts_site.longitude,
-                    st.session_state.sim_bts_height,
-                    coverage_grid.bts_site.latitude + 0.02,
-                    coverage_grid.bts_site.longitude + 0.02,
-                    cpe_specs.antenna_height_default_m,
-                    st.session_state.sim_frequency, terrain_grid, st.session_state.sim_env)
-            else:
-                edge_loss = okumura_hata(edge_dist_km, st.session_state.sim_frequency,
-                                         st.session_state.sim_bts_height,
-                                         cpe_specs.antenna_height_default_m,
-                                         st.session_state.sim_env)
-            edge_rssi   = compute_rssi(edge_loss, eirp,
-                                        cpe_specs.antenna_gain_dbi, cpe_specs.cable_loss_db)
-            edge_margin = edge_rssi - cpe_specs.receiver_sensitivity_dbm
+            _edge_pl = terrain_aware_loss(
+                coverage_grid.bts_site.latitude, coverage_grid.bts_site.longitude,
+                st.session_state.sim_bts_height,
+                coverage_grid.bts_site.latitude + 0.02,
+                coverage_grid.bts_site.longitude + 0.02,
+                cpe_specs.antenna_height_default_m,
+                st.session_state.sim_frequency, terrain_grid, st.session_state.sim_env)
+            edge_loss = _edge_pl.total_db
+            edge_diff = _edge_pl.diffraction_db
+            edge_clutter = _edge_pl.clutter_db
+            from propagation import ENVIRONMENT_SIGMA, shadowing_margin as _shad_margin
+            _sigma = ENVIRONMENT_SIGMA.get(st.session_state.sim_env, 4.0)
+            _shad90 = _shad_margin(0.90, _sigma)
+            _shad95 = _shad_margin(0.95, _sigma)
+            edge_rssi = compute_rssi(edge_loss, eirp,
+                                     cpe_specs.antenna_gain_dbi, cpe_specs.cable_loss_db)
+            edge_rssi_real = compute_rssi(
+                edge_loss + _shad90 + system_margin_db, eirp,
+                cpe_specs.antenna_gain_dbi, cpe_specs.cable_loss_db)
+            edge_rssi_pess = compute_rssi(
+                edge_loss + edge_clutter + _shad95 + system_margin_db, eirp,
+                cpe_specs.antenna_gain_dbi, cpe_specs.cable_loss_db)
+            edge_margin = edge_rssi_real - cpe_specs.receiver_sensitivity_dbm
             rec_text = (f"Coverage {stats['coverage_pct']}% at "
                         f"{st.session_state.sim_frequency:.1f} MHz. "
-                        f"Link margin at edge: {edge_margin:.1f} dB.")
-            if edge_margin < 6:
-                rec_text += " WARNING: Link margin is critical. Field surveys recommended."
+                        f"Realistic link margin at edge: {edge_margin:.1f} dB.")
+            if edge_margin < 3:
+                rec_text += " WARNING: Realistic link margin is critical. Field surveys essential."
 
             pdf_buf = BytesIO()
             generate_pdf_report(
@@ -1352,6 +1375,12 @@ if (st.session_state.mode == 'coverage'
                 edge_margin_db=edge_margin,
                 conclusion_text=rec_text,
                 all_sites_comparison=None,
+                system_margin_db=system_margin_db,
+                shadowing_margin_90_db=_shad90,
+                clutter_db=edge_clutter,
+                diffraction_db=edge_diff,
+                edge_rssi_realistic_dbm=edge_rssi_real,
+                edge_rssi_pessimistic_dbm=edge_rssi_pess,
             )
 
             col_pdf, col_cmp = st.columns(2)
@@ -1421,7 +1450,7 @@ if (st.session_state.mode == 'coverage'
                 df_comp = pd.DataFrame(rows)
                 totals = {"CPE": "✅ Covered / Total"}
                 for bts_n, res in comp.items():
-                    cov = sum(1 for r in res if r['rssi_dbm'] >= -90)
+                    cov = sum(1 for r in res if r['rssi_dbm'] >= -85)
                     totals[bts_n] = f"{cov}/{len(res)}"
                 totals["Best Site ★"] = ""
                 totals["Margin Adv (dB)"] = ""
@@ -1469,26 +1498,25 @@ if (st.session_state.mode == 'coverage'
                                     st.session_state.bts_specs.antenna_gain_dbi,
                                     st.session_state.bts_specs.cable_loss_db)
                 cpe_rows = []
+                from propagation import ENVIRONMENT_SIGMA, shadowing_margin as _sm2
+                _sig2 = ENVIRONMENT_SIGMA.get(st.session_state.sim_env, 4.0)
+                _shad_real = _sm2(0.90, _sig2)
                 for s in cpe_sites:
                     d_km = haversine_distance(
                         coverage_grid.bts_site.latitude,
                         coverage_grid.bts_site.longitude,
                         s.latitude, s.longitude)
                     d_km = max(d_km, 0.01)
-                    if (st.session_state.sim_model == 'terrain_aware'
-                            and not terrain_grid.is_flat):
-                        loss, _, _ = terrain_aware_loss(
-                            coverage_grid.bts_site.latitude,
-                            coverage_grid.bts_site.longitude,
-                            st.session_state.sim_bts_height,
-                            s.latitude, s.longitude, s.height_m,
-                            st.session_state.sim_frequency,
-                            terrain_grid, st.session_state.sim_env)
-                    else:
-                        loss = okumura_hata(d_km, st.session_state.sim_frequency,
-                                            st.session_state.sim_bts_height,
-                                            s.height_m, st.session_state.sim_env)
-                    rssi   = compute_rssi(loss, eirp,
+                    pl_r = terrain_aware_loss(
+                        coverage_grid.bts_site.latitude,
+                        coverage_grid.bts_site.longitude,
+                        st.session_state.sim_bts_height,
+                        s.latitude, s.longitude, s.height_m,
+                        st.session_state.sim_frequency,
+                        terrain_grid, st.session_state.sim_env)
+                    # Use realistic RSSI (base + diffraction + shadowing(90%) + system margin)
+                    loss_real = pl_r.total_db + _shad_real + st.session_state.system_margin_db
+                    rssi   = compute_rssi(loss_real, eirp,
                                           st.session_state.cpe_specs.antenna_gain_dbi,
                                           st.session_state.cpe_specs.cable_loss_db)
                     margin = rssi - st.session_state.cpe_specs.receiver_sensitivity_dbm
@@ -1496,7 +1524,7 @@ if (st.session_state.mode == 'coverage'
                         "Client Name": s.name,
                         "Distance (km)": round(d_km, 2),
                         "Elevation (m)": round(get_elevation(terrain_grid, s.latitude, s.longitude), 1),
-                        "RSSI (dBm)": round(rssi, 1),
+                        "Realistic RSSI (dBm)": round(rssi, 1),
                         "Link Margin (dB)": round(margin, 1),
                         "Status": cpe_status(rssi),
                     })
@@ -1527,18 +1555,19 @@ elif (st.session_state.mode == 'cpe_analysis'
     exc     = sum(1 for r in results if r["rssi_dbm"] >= -65)
     good    = sum(1 for r in results if -75 <= r["rssi_dbm"] < -65)
     marg    = sum(1 for r in results if -85 <= r["rssi_dbm"] < -75)
-    weak    = sum(1 for r in results if -90 <= r["rssi_dbm"] < -85)
-    nolink  = sum(1 for r in results if r["rssi_dbm"] < -90)
-    covered = exc + good + marg + weak
+    nolink  = sum(1 for r in results if r["rssi_dbm"] < -85)
+    covered = exc + good + marg
 
+    sys_m = results[0]["system_margin_db"] if results else 18.0
     st.markdown(
         f'<div class="summary-bar">'
-        f'📡 <b>{covered} of {total} CPE sites covered</b>'
+        f'📡 <b>{covered} of {total} CPE sites viable</b>'
         f'<span>·</span>🟢 {exc} Excellent'
         f'<span>·</span>🟡 {good} Good'
         f'<span>·</span>🟠 {marg} Marginal'
-        f'<span>·</span>🔴 {weak} Weak'
         f'<span>·</span>⛔ {nolink} No Link'
+        f'<span style="margin-left:auto;font-size:11px;color:#64748B;">'
+        f'Realistic scenario · {sys_m:.0f} dB system margin</span>'
         f'</div>', unsafe_allow_html=True)
 
     # Map
@@ -1607,9 +1636,8 @@ elif (st.session_state.mode == 'cpe_analysis'
   <div class="legend-item"><div class="legend-swatch" style="background:#27ae60;"></div>Excellent (≥ -65)</div>
   <div class="legend-item"><div class="legend-swatch" style="background:#f39c12;"></div>Good (-65 to -75)</div>
   <div class="legend-item"><div class="legend-swatch" style="background:#e67e22;"></div>Marginal (-75 to -85)</div>
-  <div class="legend-item"><div class="legend-swatch" style="background:#e74c3c;"></div>Weak (-85 to -90)</div>
-  <div class="legend-item"><div class="legend-swatch" style="background:#95a5a6;"></div>No Link</div>
-  <div class="legend-item" style="margin-left:auto;color:#888;font-size:11px;">Click a marker for full link budget · Ruler tool bottom-left</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#95a5a6;"></div>No Link (&lt; -85)</div>
+  <div class="legend-item" style="margin-left:auto;color:#888;font-size:11px;">Realistic scenario · click marker for budget · ruler bottom-left</div>
 </div>""", unsafe_allow_html=True)
 
         try:
@@ -1630,9 +1658,11 @@ elif (st.session_state.mode == 'cpe_analysis'
         df_results = pd.DataFrame([{
             "#": i + 1,
             "Name": r["name"],
-            "Distance (km)": r["distance_km"],
+            "Dist (km)": r["distance_km"],
             "Sector": r["best_sector"] + 1,
-            "RSSI (dBm)": r["rssi_dbm"],
+            "Optimistic (dBm)": r.get("rssi_optimistic_dbm", r["rssi_dbm"]),
+            "Realistic (dBm)": r.get("rssi_realistic_dbm", r["rssi_dbm"]),
+            "Pessimistic (dBm)": r.get("rssi_pessimistic_dbm", r["rssi_dbm"]),
             "Margin (dB)": r["link_margin_db"],
             "LoS": r["fresnel_clearance"],
             "Status": r["status"],

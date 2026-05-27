@@ -7,7 +7,9 @@ from typing import Dict, Any, List, Tuple, Optional
 
 from propagation import (terrain_aware_loss, okumura_hata, compute_eirp, compute_rssi,
                           haversine_distance, bearing, sector_gain,
-                          get_sector_gain_for_point, best_sector_for_point)
+                          get_sector_gain_for_point, best_sector_for_point,
+                          PathLossResult, ENVIRONMENT_SIGMA, ENVIRONMENT_CLUTTER_LOSS,
+                          shadowing_margin)
 from terrain import TerrainGrid, get_elevation
 
 
@@ -34,9 +36,7 @@ def get_rssi_color(rssi: float) -> str:
         return "#27ae60"
     elif rssi >= -85.0:
         return "#f1c40f"
-    elif rssi >= -90.0:
-        return "#e74c3c"
-    return ""
+    return ""  # below -85 dBm = below minimum coverage threshold
 
 
 def cpe_status(rssi: float) -> str:
@@ -46,8 +46,6 @@ def cpe_status(rssi: float) -> str:
         return "🟡 Good"
     elif rssi >= -85.0:
         return "🟠 Marginal"
-    elif rssi >= -90.0:
-        return "🔴 Weak"
     return "⛔ No Link"
 
 
@@ -58,8 +56,6 @@ def cpe_marker_color(rssi: float) -> str:
         return "orange"
     elif rssi >= -85.0:
         return "lightred"
-    elif rssi >= -90.0:
-        return "red"
     return "gray"
 
 
@@ -70,8 +66,6 @@ def cpe_line_color(rssi: float) -> str:
         return "#f39c12"
     elif rssi >= -85.0:
         return "#e67e22"
-    elif rssi >= -90.0:
-        return "#e74c3c"
     return "#95a5a6"
 
 
@@ -139,7 +133,7 @@ def compute_coverage_grid(bts_site: Any, equipment_bts: Any, equipment_cpe: Any,
             rssi_array[r, c] = compute_rssi(loss, eirp_dbm, rx_gain, rx_loss, sg_db)
 
     total_cells = nrows * ncols
-    covered_cells = int(np.sum(rssi_array >= -90.0))
+    covered_cells = int(np.sum(rssi_array >= -85.0))
     good_cells = int(np.sum(rssi_array >= -75.0))
     excellent_cells = int(np.sum(rssi_array >= -65.0))
 
@@ -147,13 +141,13 @@ def compute_coverage_grid(bts_site: Any, equipment_bts: Any, equipment_cpe: Any,
     good_pct = (good_cells / total_cells * 100.0) if total_cells > 0 else 0.0
     excellent_pct = (excellent_cells / total_cells * 100.0) if total_cells > 0 else 0.0
 
-    covered_rssis = rssi_array[rssi_array >= -90.0]
+    covered_rssis = rssi_array[rssi_array >= -85.0]
     avg_rssi = float(np.mean(covered_rssis)) if len(covered_rssis) > 0 else -110.0
 
     max_range_km = 0.0
     for r in range(nrows):
         for c in range(ncols):
-            if rssi_array[r, c] >= -90.0:
+            if rssi_array[r, c] >= -85.0:
                 dist = haversine_distance(bts_lat, bts_lon, lats[r], lons[c])
                 if dist > max_range_km:
                     max_range_km = dist
@@ -178,8 +172,9 @@ def compute_cpe_analysis(bts_site: Any, cpe_sites: List[Any],
                           equipment_bts: Any, equipment_cpe: Any,
                           f_mhz: float, terrain_grid: TerrainGrid,
                           model: str, environment: str,
-                          bts_height_override: Optional[float] = None) -> List[Dict[str, Any]]:
-    """Compute per-CPE link budget for every CPE site."""
+                          bts_height_override: Optional[float] = None,
+                          system_margin_db: float = 18.0) -> List[Dict[str, Any]]:
+    """Compute per-CPE link budget for every CPE site (three-scenario output)."""
     results = []
     bts_lat = bts_site.latitude
     bts_lon = bts_site.longitude
@@ -195,6 +190,11 @@ def compute_cpe_analysis(bts_site: Any, cpe_sites: List[Any],
     ftb = getattr(equipment_bts, 'front_to_back_ratio', 25.0)
     active_azimuths = raw_azimuths[:n_sectors] if n_sectors > 1 else None
 
+    sigma = ENVIRONMENT_SIGMA.get(environment, 4.0)
+    shad_90 = shadowing_margin(0.90, sigma)
+    shad_95 = shadowing_margin(0.95, sigma)
+    clutter = float(ENVIRONMENT_CLUTTER_LOSS.get(environment, 3))
+
     for cpe in cpe_sites:
         try:
             d_km = haversine_distance(bts_lat, bts_lon, cpe.latitude, cpe.longitude)
@@ -203,7 +203,6 @@ def compute_cpe_analysis(bts_site: Any, cpe_sites: List[Any],
 
             pt_bearing = bearing(bts_lat, bts_lon, cpe.latitude, cpe.longitude)
 
-            # Sector analysis
             if active_azimuths:
                 best_sec = best_sector_for_point(bts_lat, bts_lon,
                                                   cpe.latitude, cpe.longitude,
@@ -213,21 +212,30 @@ def compute_cpe_analysis(bts_site: Any, cpe_sites: List[Any],
                 best_sec = 0
                 sg_db = 0.0
 
-            # Propagation
-            diffraction_loss = 0.0
-            if model == 'terrain_aware' and not terrain_grid.is_flat:
-                total_loss, base_loss, diffraction_loss = terrain_aware_loss(
-                    bts_lat, bts_lon, bts_height,
-                    cpe.latitude, cpe.longitude, cpe.height_m,
-                    f_mhz, terrain_grid, environment)
-                path_loss = total_loss
-            else:
-                path_loss = okumura_hata(d_km, f_mhz, bts_height,
-                                         cpe.height_m, environment)
+            # Always use terrain_aware_loss to get PathLossResult
+            pl_result = terrain_aware_loss(
+                bts_lat, bts_lon, bts_height,
+                cpe.latitude, cpe.longitude, cpe.height_m,
+                f_mhz, terrain_grid, environment)
 
-            rssi = compute_rssi(path_loss, eirp,
-                                 equipment_cpe.antenna_gain_dbi,
-                                 equipment_cpe.cable_loss_db, sg_db)
+            diffraction_loss = pl_result.diffraction_db
+            eff_hb = pl_result.effective_hb_m
+
+            # Optimistic: base + diffraction (no margins)
+            rssi_opt = compute_rssi(pl_result.total_db, eirp,
+                                    equipment_cpe.antenna_gain_dbi,
+                                    equipment_cpe.cable_loss_db, sg_db)
+            # Realistic: + shadowing 90% + system margin
+            rssi_real = compute_rssi(pl_result.total_db + shad_90 + system_margin_db,
+                                     eirp, equipment_cpe.antenna_gain_dbi,
+                                     equipment_cpe.cable_loss_db, sg_db)
+            # Pessimistic: + clutter + shadowing 95% + system margin
+            rssi_pess = compute_rssi(pl_result.total_db + clutter + shad_95 + system_margin_db,
+                                     eirp, equipment_cpe.antenna_gain_dbi,
+                                     equipment_cpe.cable_loss_db, sg_db)
+
+            # Use realistic RSSI as the primary displayed value
+            rssi = rssi_real
             margin = rssi - equipment_cpe.receiver_sensitivity_dbm
 
             if terrain_grid.is_flat:
@@ -235,7 +243,7 @@ def compute_cpe_analysis(bts_site: Any, cpe_sites: List[Any],
             elif diffraction_loss <= 0:
                 fresnel = "✅ Clear LoS"
             else:
-                fresnel = f"⚠️ {diffraction_loss:.1f} dB diffraction loss"
+                fresnel = f"⚠️ {diffraction_loss:.1f} dB diffraction"
 
             results.append({
                 "name": cpe.name,
@@ -245,9 +253,19 @@ def compute_cpe_analysis(bts_site: Any, cpe_sites: List[Any],
                 "bearing_deg": round(pt_bearing, 1),
                 "best_sector": best_sec,
                 "sector_gain_db": round(sg_db, 1),
-                "terrain_loss_db": round(path_loss, 1),
-                "path_loss_db": round(path_loss, 1),
-                "rssi_dbm": round(rssi, 1),
+                "terrain_loss_db": round(pl_result.total_db, 1),
+                "path_loss_db": round(pl_result.total_db, 1),
+                "base_loss_db": round(pl_result.base_db, 1),
+                "diffraction_db": round(diffraction_loss, 1),
+                "clutter_db": round(clutter, 1),
+                "shadowing_margin_90_db": round(shad_90, 1),
+                "shadowing_margin_95_db": round(shad_95, 1),
+                "system_margin_db": round(system_margin_db, 1),
+                "effective_hb_m": round(eff_hb, 1),
+                "rssi_dbm": round(rssi, 1),               # realistic (primary)
+                "rssi_optimistic_dbm": round(rssi_opt, 1),
+                "rssi_realistic_dbm": round(rssi_real, 1),
+                "rssi_pessimistic_dbm": round(rssi_pess, 1),
                 "link_margin_db": round(margin, 1),
                 "fresnel_clearance": fresnel,
                 "status": cpe_status(rssi),
@@ -261,7 +279,13 @@ def compute_cpe_analysis(bts_site: Any, cpe_sites: List[Any],
                 "distance_km": round(d_km, 2) if 'd_km' in dir() else 0,
                 "bearing_deg": 0, "best_sector": 0, "sector_gain_db": 0,
                 "terrain_loss_db": 0, "path_loss_db": 0,
-                "rssi_dbm": -999, "link_margin_db": -999,
+                "base_loss_db": 0, "diffraction_db": 0,
+                "clutter_db": 0, "shadowing_margin_90_db": 0,
+                "shadowing_margin_95_db": 0, "system_margin_db": system_margin_db,
+                "effective_hb_m": 0,
+                "rssi_dbm": -999, "rssi_optimistic_dbm": -999,
+                "rssi_realistic_dbm": -999, "rssi_pessimistic_dbm": -999,
+                "link_margin_db": -999,
                 "fresnel_clearance": "Error computing link",
                 "status": "⛔ No Link",
                 "marker_color": "gray", "line_color": "#95a5a6",
@@ -273,7 +297,7 @@ def compute_cpe_analysis(bts_site: Any, cpe_sites: List[Any],
 # ── GeoJSON export ────────────────────────────────────────────────────────────
 
 def coverage_to_geojson(coverage_grid: CoverageGrid,
-                         threshold_dbm: float = -90.0) -> Dict[str, Any]:
+                         threshold_dbm: float = -85.0) -> Dict[str, Any]:
     features = []
     lats = coverage_grid.lats
     lons = coverage_grid.lons
@@ -330,8 +354,6 @@ def coverage_to_image(coverage_grid: CoverageGrid) -> bytes:
                 color = (39, 174, 96)
             elif rssi >= -85.0:
                 color = (241, 196, 15)
-            elif rssi >= -90.0:
-                color = (231, 76, 60)
             else:
                 color = (245, 246, 250)
             pixels[c, r] = color

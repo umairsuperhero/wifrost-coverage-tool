@@ -48,11 +48,11 @@ def draw_page_decorations(canvas, doc):
     
     canvas.restoreState()
 
-def generate_pdf_report(output_stream: BytesIO, 
-                        project_name: str, 
-                        prepared_by: str, 
-                        coverage_grid: Any, 
-                        equipment_bts: Any, 
+def generate_pdf_report(output_stream: BytesIO,
+                        project_name: str,
+                        prepared_by: str,
+                        coverage_grid: Any,
+                        equipment_bts: Any,
                         equipment_cpe: Any,
                         model_name: str,
                         environment: str,
@@ -60,7 +60,13 @@ def generate_pdf_report(output_stream: BytesIO,
                         edge_rssi_dbm: float,
                         edge_margin_db: float,
                         conclusion_text: str,
-                        all_sites_comparison: Optional[List[Dict[str, Any]]] = None) -> None:
+                        all_sites_comparison: Optional[List[Dict[str, Any]]] = None,
+                        system_margin_db: float = 18.0,
+                        shadowing_margin_90_db: float = 0.0,
+                        clutter_db: float = 0.0,
+                        diffraction_db: float = 0.0,
+                        edge_rssi_realistic_dbm: Optional[float] = None,
+                        edge_rssi_pessimistic_dbm: Optional[float] = None) -> None:
     """
     Generate a 2-page PDF report.
     - Page 1: Metadata, Coverage Map image, Stats Summary, Recommendation.
@@ -264,18 +270,18 @@ def generate_pdf_report(output_stream: BytesIO,
     story.append(Paragraph("This budget represents signal levels at the edge of the service area.", style_subtitle))
     story.append(Spacer(1, 8))
     
-    # Determine Margin Colors
+    # Determine Margin Colors based on realistic margin (green >10 dB, amber 3-10 dB, red <3 dB)
     margin_bg = COLOR_PASS_BG
     margin_text_col = COLOR_PASS_TEXT
-    margin_status = "PASS"
-    if edge_margin_db < 6.0:
+    margin_status = "PASS (≥ +10 dB)"
+    if edge_margin_db < 3.0:
         margin_bg = COLOR_FAIL_BG
         margin_text_col = COLOR_FAIL_TEXT
-        margin_status = "FAIL (CRITICAL)"
+        margin_status = "FAIL — CRITICAL (< +3 dB)"
     elif edge_margin_db < 10.0:
         margin_bg = COLOR_WARN_BG
         margin_text_col = COLOR_WARN_TEXT
-        margin_status = "MARGINAL"
+        margin_status = "MARGINAL (+3 to +10 dB)"
         
     style_pass_fail = ParagraphStyle(
         'PassFailStyle',
@@ -284,90 +290,152 @@ def generate_pdf_report(output_stream: BytesIO,
         textColor=margin_text_col
     )
     
-    # Link Budget Table Data
-    # Columns: Parameter | BTS (LT100B) Value | CPE (LT100C) Value | Notes
+    eirp_bts = compute_eirp(equipment_bts.tx_power_dbm,
+                             equipment_bts.antenna_gain_dbi,
+                             equipment_bts.cable_loss_db)
+    eirp_cpe = compute_eirp(equipment_cpe.tx_power_dbm,
+                             equipment_cpe.antenna_gain_dbi,
+                             equipment_cpe.cable_loss_db)
+
+    # Realistic margin: edge_rssi_dbm already includes shadowing + system margin from caller
+    # Pessimistic margin uses edge_rssi_pessimistic if provided
+    realistic_rssi = edge_rssi_realistic_dbm if edge_rssi_realistic_dbm is not None else edge_rssi_dbm
+    pessimistic_rssi = edge_rssi_pessimistic_dbm if edge_rssi_pessimistic_dbm is not None else (edge_rssi_dbm - clutter_db - 2.0)
+    realistic_margin = realistic_rssi - equipment_cpe.receiver_sensitivity_dbm
+    pessimistic_margin = pessimistic_rssi - equipment_cpe.receiver_sensitivity_dbm
+
+    def _margin_color(m):
+        if m >= 10.0:
+            return COLOR_PASS_BG
+        elif m >= 3.0:
+            return COLOR_WARN_BG
+        return COLOR_FAIL_BG
+
     link_budget_data = [
         [
             Paragraph("<b>Parameter</b>", style_body_bold),
             Paragraph("<b>Transmitter (BTS)</b>", style_body_bold),
             Paragraph("<b>Receiver (CPE)</b>", style_body_bold),
-            Paragraph("<b>Technical Notes</b>", style_body_bold)
+            Paragraph("<b>Notes</b>", style_body_bold)
         ],
         [
             Paragraph("Model & Manufacturer", style_body),
             Paragraph(f"{equipment_bts.manufacturer} {equipment_bts.model_name}", style_body),
             Paragraph(f"{equipment_cpe.manufacturer} {equipment_cpe.model_name}", style_body),
-            Paragraph("TVWS active equipment specs", style_body)
+            Paragraph("TVWS equipment specs", style_body)
         ],
         [
-            Paragraph("TX Power (per antenna)", style_body),
+            Paragraph("TX Power", style_body),
             Paragraph(f"{equipment_bts.tx_power_dbm} dBm", style_body),
             Paragraph(f"{equipment_cpe.tx_power_dbm} dBm", style_body),
-            Paragraph("MIMO 2x2 radio transmitter power", style_body)
+            Paragraph("Transmitter output power", style_body)
         ],
         [
             Paragraph("Antenna Gain", style_body),
             Paragraph(f"{equipment_bts.antenna_gain_dbi} dBi", style_body),
             Paragraph(f"{equipment_cpe.antenna_gain_dbi} dBi", style_body),
-            Paragraph("BTS Sector panel vs. CPE Integrated", style_body)
+            Paragraph("BTS sector panel / CPE integrated", style_body)
         ],
         [
             Paragraph("Cable & Connector Loss", style_body),
             Paragraph(f"{equipment_bts.cable_loss_db} dB", style_body),
             Paragraph(f"{equipment_cpe.cable_loss_db} dB", style_body),
-            Paragraph("Coaxial jumper and connection losses", style_body)
+            Paragraph("Coaxial jumper and connectors", style_body)
         ],
         [
-            Paragraph("Equivalent Isotropic Radiated Power", style_body),
-            Paragraph(f"{compute_eirp(equipment_bts.tx_power_dbm, equipment_bts.antenna_gain_dbi, equipment_bts.cable_loss_db):.1f} dBm", style_body_bold),
-            Paragraph(f"{compute_eirp(equipment_cpe.tx_power_dbm, equipment_cpe.antenna_gain_dbi, equipment_cpe.cable_loss_db):.1f} dBm", style_body_bold),
-            Paragraph("Calculated EIRP (TX Power + Gain - Loss)", style_body)
+            Paragraph("<b>EIRP</b>", style_body_bold),
+            Paragraph(f"<b>{eirp_bts:.1f} dBm</b>", style_body_bold),
+            Paragraph(f"<b>{eirp_cpe:.1f} dBm</b>", style_body_bold),
+            Paragraph("TX Power + Gain − Cable Loss", style_body)
         ],
         [
-            Paragraph("Path Loss (Edge)", style_body),
-            Paragraph("-", style_body),
+            Paragraph("Free-Space Path Loss (base)", style_body),
+            Paragraph("—", style_body),
             Paragraph(f"{edge_loss_db:.1f} dB", style_body),
-            Paragraph(f"Propagation loss: {model_name} ({environment})", style_body)
+            Paragraph(f"{model_name} ({environment})", style_body)
         ],
         [
-            Paragraph("<b>Received Signal (RSSI)</b>", style_body),
-            Paragraph("-", style_body),
+            Paragraph("Terrain Diffraction Loss", style_body),
+            Paragraph("—", style_body),
+            Paragraph(f"{diffraction_db:.1f} dB", style_body),
+            Paragraph("Deygout multi-knife-edge (≤30 dB)", style_body)
+        ],
+        [
+            Paragraph("Environment Clutter Loss", style_body),
+            Paragraph("—", style_body),
+            Paragraph(f"{clutter_db:.1f} dB", style_body),
+            Paragraph(f"Terrain/land-use correction ({environment})", style_body)
+        ],
+        [
+            Paragraph("Shadowing Margin (90% loc.)", style_body),
+            Paragraph("—", style_body),
+            Paragraph(f"{shadowing_margin_90_db:.1f} dB", style_body),
+            Paragraph("Log-normal σ · z(0.90)", style_body)
+        ],
+        [
+            Paragraph("System Margin", style_body),
+            Paragraph("—", style_body),
+            Paragraph(f"{system_margin_db:.1f} dB", style_body),
+            Paragraph("Fade+body+cable aging+interference", style_body)
+        ],
+        [
+            Paragraph("<b>RSSI (Optimistic)</b>", style_body_bold),
+            Paragraph("—", style_body),
             Paragraph(f"<b>{edge_rssi_dbm:.1f} dBm</b>", style_body_bold),
-            Paragraph("RSSI at the CPE antenna feed input", style_body)
+            Paragraph("Median signal, no margins applied", style_body)
+        ],
+        [
+            Paragraph("<b>RSSI (Realistic)</b>", style_body_bold),
+            Paragraph("—", style_body),
+            Paragraph(f"<b>{realistic_rssi:.1f} dBm</b>", style_body_bold),
+            Paragraph("Base + diffraction + shadowing + sys margin", style_body)
         ],
         [
             Paragraph("Receiver Sensitivity", style_body),
             Paragraph(f"{equipment_bts.receiver_sensitivity_dbm:.1f} dBm", style_body),
             Paragraph(f"{equipment_cpe.receiver_sensitivity_dbm:.1f} dBm", style_body),
-            Paragraph("Minimum threshold for reliable link", style_body)
+            Paragraph("Minimum for reliable demodulation", style_body)
         ],
         [
-            Paragraph("<b>Link Margin</b>", style_body_bold),
-            Paragraph("-", style_body),
-            Paragraph(f"<b>{edge_margin_db:.1f} dB</b>", style_body_bold),
-            Paragraph("RSSI - Sensitivity (Target: >10.0 dB)", style_body)
+            Paragraph("<b>Link Margin (Realistic)</b>", style_body_bold),
+            Paragraph("—", style_body),
+            Paragraph(f"<b>{realistic_margin:.1f} dB</b>", style_body_bold),
+            Paragraph("Target: ≥ +3 dB (green ≥10, amber 3–10, red <3)", style_body)
+        ],
+        [
+            Paragraph("<b>Link Margin (Pessimistic)</b>", style_body_bold),
+            Paragraph("—", style_body),
+            Paragraph(f"<b>{pessimistic_margin:.1f} dB</b>", style_body_bold),
+            Paragraph("Includes clutter + 95% shadowing margin", style_body)
         ],
         [
             Paragraph("<b>Link Status</b>", style_body_bold),
-            Paragraph("-", style_body),
+            Paragraph("—", style_body),
             Paragraph(f"<b>{margin_status}</b>", style_pass_fail),
-            Paragraph("Green: >10dB, Amber: 6-10dB, Red: <6dB", style_body)
+            Paragraph("Based on realistic margin", style_body)
         ]
     ]
-    
-    # Table Widths sum up to 540 points
+
     lb_table = Table(link_budget_data, colWidths=[160, 110, 110, 160])
+
+    # Build row-level color styles
+    n_rows = len(link_budget_data)
+    realistic_row = 14   # 0-indexed: "Link Margin (Realistic)"
+    pessimistic_row = 15
+    realistic_bg = _margin_color(realistic_margin)
+    pessimistic_bg = _margin_color(pessimistic_margin)
+
     lb_table.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), COLOR_PRIMARY),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-        ('BOTTOMPADDING', (0,0), (-1,0), 6),
-        ('TOPPADDING', (0,0), (-1,0), 6),
-        ('BOTTOMPADDING', (0,1), (-1,-1), 4),
-        ('TOPPADDING', (0,1), (-1,-1), 4),
-        ('GRID', (0,0), (-1,-1), 0.5, COLOR_BORDER),
-        # Colorize the Margin & Status Row
-        ('BACKGROUND', (2,9), (2,9), margin_bg),
-        ('BACKGROUND', (2,10), (2,10), margin_bg),
+        ('BACKGROUND', (0, 0), (-1, 0), COLOR_PRIMARY),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('TOPPADDING', (0, 0), (-1, 0), 6),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
+        ('TOPPADDING', (0, 1), (-1, -1), 3),
+        ('GRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
+        # Color the margin rows
+        ('BACKGROUND', (0, realistic_row), (-1, realistic_row), realistic_bg),
+        ('BACKGROUND', (0, pessimistic_row), (-1, pessimistic_row), pessimistic_bg),
     ]))
     
     # Change text color of header row in TableStyle
