@@ -40,120 +40,190 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
-html, body, [class*="css"] { font-family: 'Outfit', sans-serif; }
-.block-container { padding-top: 1.2rem !important; padding-bottom: 2rem !important; }
+/* ── Google font ── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-/* ── Sidebar ─────────────────────────── */
-[data-testid="stSidebar"] { background: #f0f2f6; }
-[data-testid="stSidebar"] > div:first-child { padding: 0.5rem 0.9rem 1rem; }
-.sb-section {
-    background: #1B365D;
-    color: white;
-    padding: 7px 12px;
-    border-radius: 6px;
-    font-size: 11.5px;
-    font-weight: 700;
+/* ── Root reset ── */
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif !important;
+}
+
+/* ── Hide Streamlit chrome ── */
+#MainMenu, footer, header { visibility: hidden; }
+.stDeployButton { display: none; }
+
+/* ── Main page background ── */
+.stApp {
+    background-color: #0F1117;
+}
+
+/* ── Sidebar ── */
+[data-testid="stSidebar"] {
+    background-color: #0D1020 !important;
+    border-right: 1px solid #1E2640 !important;
+}
+
+[data-testid="stSidebar"] .stMarkdown p,
+[data-testid="stSidebar"] label {
+    color: #94A3B8 !important;
+    font-size: 12px !important;
     text-transform: uppercase;
-    letter-spacing: 0.7px;
-    margin: 16px 0 8px 0;
-    display: flex;
-    align-items: center;
-    gap: 7px;
+    letter-spacing: 0.05em;
 }
-.sb-section-alt {
-    background: #2c4a7c;
-    color: white;
-    padding: 7px 12px;
-    border-radius: 6px;
-    font-size: 11.5px;
-    font-weight: 700;
+
+/* ── Sidebar section headers ── */
+[data-testid="stSidebar"] h3 {
+    color: #F1F5F9 !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    border-bottom: 1px solid #1E2640;
+    padding-bottom: 6px;
+    margin-top: 20px;
+}
+
+/* ── All buttons ── */
+.stButton > button {
+    background: linear-gradient(135deg, #3B82F6, #1D4ED8) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+    padding: 10px 20px !important;
+    transition: opacity 0.15s !important;
+    width: 100% !important;
+}
+.stButton > button:hover {
+    opacity: 0.85 !important;
+}
+
+/* ── Secondary buttons (outlined style) ── */
+.stButton > button[kind="secondary"] {
+    background: transparent !important;
+    border: 1px solid #3B82F6 !important;
+    color: #3B82F6 !important;
+}
+
+/* ── Sliders ── */
+[data-testid="stSlider"] > div > div > div {
+    background-color: #3B82F6 !important;
+}
+
+/* ── File uploader ── */
+[data-testid="stFileUploader"] {
+    background-color: #161B2E !important;
+    border: 2px dashed #3B82F6 !important;
+    border-radius: 12px !important;
+    padding: 12px !important;
+}
+[data-testid="stFileUploader"]:hover {
+    border-color: #60A5FA !important;
+    background-color: #1A2040 !important;
+}
+
+/* ── Expanders ── */
+[data-testid="stExpander"] {
+    background-color: #161B2E !important;
+    border: 1px solid #1E2640 !important;
+    border-radius: 10px !important;
+}
+
+/* ── Metric cards ── */
+[data-testid="stMetric"] {
+    background-color: #161B2E !important;
+    border: 1px solid #1E2640 !important;
+    border-radius: 10px !important;
+    padding: 16px !important;
+}
+[data-testid="stMetricLabel"] {
+    color: #64748B !important;
+    font-size: 11px !important;
     text-transform: uppercase;
-    letter-spacing: 0.7px;
-    margin: 16px 0 8px 0;
-    display: flex;
-    align-items: center;
-    gap: 7px;
+    letter-spacing: 0.06em;
+}
+[data-testid="stMetricValue"] {
+    color: #F1F5F9 !important;
+    font-size: 28px !important;
+    font-weight: 700 !important;
 }
 
-/* ── Header ──────────────────────────── */
-.main-header {
-    background: linear-gradient(135deg, #1B365D 0%, #0e2040 100%);
-    padding: 18px 28px;
-    border-radius: 12px;
-    color: white;
-    margin-bottom: 20px;
-    box-shadow: 0 4px 20px rgba(0,0,0,.15);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-.main-header h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.5px; }
-.main-header p  { margin: 4px 0 0; font-size: 13px; opacity: .75; }
-.header-badge {
-    background: rgba(255,255,255,.15);
-    border: 1.5px solid rgba(255,255,255,.5);
-    padding: 6px 16px;
-    border-radius: 20px;
-    font-size: 13px;
-    font-weight: 700;
-    white-space: nowrap;
-    letter-spacing: .3px;
+/* ── Radio buttons ── */
+[data-testid="stRadio"] label {
+    background-color: #161B2E !important;
+    border: 1px solid #1E2640 !important;
+    border-radius: 6px !important;
+    padding: 4px 12px !important;
+    margin-right: 6px !important;
 }
 
-/* ── Welcome cards ───────────────────── */
-.welcome-card {
-    background: white;
-    border: 1px solid #e0e4ea;
-    border-radius: 12px;
-    padding: 24px 20px;
-    text-align: center;
-    transition: transform .2s, box-shadow .2s;
-    height: 100%;
-}
-.welcome-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,.1); }
-.welcome-card-icon { font-size: 40px; margin-bottom: 12px; }
-.welcome-card-title { font-size: 15px; font-weight: 700; color: #1B365D; margin-bottom: 8px; }
-.welcome-card-text { font-size: 13px; color: #667; line-height: 1.5; }
-
-/* ── Terrain badge ───────────────────── */
-.badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 14px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 700;
-}
-.badge-ok  { background: #d4edda; color: #155724; }
-.badge-warn { background: #fff3cd; color: #856404; }
-
-/* ── Banners ─────────────────────────── */
-.banner-success {
-    background: linear-gradient(135deg, #d4edda 0%, #c8e6c9 100%);
-    border-left: 5px solid #28a745;
-    color: #155724;
-    padding: 14px 20px;
-    border-radius: 8px;
-    margin: 12px 0;
-    font-weight: 600;
-    font-size: 15px;
-    box-shadow: 0 2px 10px rgba(40,167,69,.15);
-}
-.banner-warning {
-    background: linear-gradient(135deg, #fff3cd 0%, #ffe57f 100%);
-    border-left: 5px solid #ffc107;
-    color: #856404;
-    padding: 14px 20px;
-    border-radius: 8px;
-    margin: 12px 0;
-    font-weight: 600;
-    font-size: 15px;
-    box-shadow: 0 2px 10px rgba(255,193,7,.15);
+/* ── Select boxes ── */
+[data-testid="stSelectbox"] > div {
+    background-color: #161B2E !important;
+    border: 1px solid #1E2640 !important;
+    border-radius: 8px !important;
+    color: #E2E8F0 !important;
 }
 
-/* ── KPI cards ───────────────────────── */
+/* ── Number inputs ── */
+[data-testid="stNumberInput"] input,
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea {
+    background-color: #161B2E !important;
+    border: 1px solid #1E2640 !important;
+    border-radius: 8px !important;
+    color: #E2E8F0 !important;
+}
+[data-testid="stNumberInput"] input:focus,
+[data-testid="stTextInput"] input:focus {
+    border-color: #3B82F6 !important;
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.2) !important;
+}
+
+/* ── Tabs ── */
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+    background-color: #0D1020 !important;
+    border-bottom: 1px solid #1E2640 !important;
+}
+[data-testid="stTabs"] [data-baseweb="tab"] {
+    color: #64748B !important;
+    font-weight: 500;
+}
+[data-testid="stTabs"] [aria-selected="true"] {
+    color: #F1F5F9 !important;
+    border-bottom: 2px solid #3B82F6 !important;
+}
+
+/* ── Dataframe / tables ── */
+[data-testid="stDataFrame"] {
+    border: 1px solid #1E2640 !important;
+    border-radius: 10px !important;
+    overflow: hidden;
+}
+
+/* ── Alerts / info boxes ── */
+[data-testid="stAlert"] {
+    border-radius: 8px !important;
+    border-left-width: 4px !important;
+}
+
+/* ── Horizontal rule ── */
+hr {
+    border-color: #1E2640 !important;
+    margin: 16px 0 !important;
+}
+
+/* ── Progress bar ── */
+[data-testid="stProgress"] > div > div {
+    background-color: #3B82F6 !important;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0F1117; }
+::-webkit-scrollbar-thumb { background: #1E2640; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3B82F6; }
+
+/* ── KPI row (custom HTML cards) ── */
 .kpi-row {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -161,123 +231,137 @@ html, body, [class*="css"] { font-family: 'Outfit', sans-serif; }
     margin: 16px 0 20px;
 }
 .kpi-card {
-    background: white;
+    background: #161B2E;
+    border: 1px solid #1E2640;
     border-radius: 10px;
     padding: 16px 18px;
-    border-left: 4px solid var(--accent, #1B365D);
-    box-shadow: 0 2px 10px rgba(0,0,0,.06);
-    transition: transform .15s, box-shadow .15s;
+    border-left: 3px solid var(--accent, #3B82F6);
 }
-.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 5px 16px rgba(0,0,0,.1); }
-.kpi-card.c1 { --accent: #27ae60; }
-.kpi-card.c2 { --accent: #3498db; }
-.kpi-card.c3 { --accent: #9b59b6; }
-.kpi-card.c4 { --accent: #1B365D; }
 .kpi-title {
     font-size: 10.5px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: .6px;
-    color: #8896a5;
+    color: #64748B;
     margin-bottom: 6px;
 }
-.kpi-value { font-size: 26px; font-weight: 700; color: #1B365D; line-height: 1.1; }
+.kpi-value { font-size: 26px; font-weight: 700; color: #F1F5F9; line-height: 1.1; }
+.kpi-card.c1 { --accent: #22C55E; }
+.kpi-card.c2 { --accent: #3B82F6; }
+.kpi-card.c3 { --accent: #A855F7; }
+.kpi-card.c4 { --accent: #4F8EF7; }
 
-/* ── Map wrapper ─────────────────────── */
-.map-wrap {
-    border-radius: 10px;
-    overflow: hidden;
-    box-shadow: 0 3px 16px rgba(0,0,0,.12);
-    margin-bottom: 16px;
-    border: 1px solid #dfe1e6;
-}
-
-/* ── Legend bar ──────────────────────── */
+/* ── Legend bar ── */
 .legend-bar {
     display: flex;
     align-items: center;
     gap: 16px;
-    background: white;
+    background: #161B2E;
+    border: 1px solid #1E2640;
     padding: 9px 16px;
     border-radius: 8px;
-    border: 1px solid #e4e6ea;
     margin-bottom: 16px;
     flex-wrap: wrap;
 }
-.legend-label { font-size: 11.5px; font-weight: 700; color: #1B365D; margin-right: 4px; }
-.legend-item  { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: #444; }
-.legend-swatch { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
+.legend-label { font-size: 11px; font-weight: 700; color: #94A3B8; margin-right: 4px; text-transform: uppercase; letter-spacing: .05em; }
+.legend-item  { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #CBD5E1; }
+.legend-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
 
-/* ── Summary bar ─────────────────────── */
-.summary-bar {
-    background: linear-gradient(135deg, #1B365D, #2c5282);
-    color: white;
+/* ── Banners ── */
+.banner-success {
+    background: #0D2818;
+    border-left: 4px solid #22C55E;
+    color: #86EFAC;
+    padding: 12px 18px;
     border-radius: 8px;
-    padding: 13px 20px;
+    margin: 12px 0;
+    font-weight: 600;
+    font-size: 14px;
+}
+.banner-warning {
+    background: #1C1500;
+    border-left: 4px solid #EAB308;
+    color: #FDE047;
+    padding: 12px 18px;
+    border-radius: 8px;
+    margin: 12px 0;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+/* ── Summary bar ── */
+.summary-bar {
+    background: #161B2E;
+    border: 1px solid #1E2640;
+    border-left: 4px solid #3B82F6;
+    color: #E2E8F0;
+    border-radius: 8px;
+    padding: 12px 18px;
     font-size: 14px;
     font-weight: 600;
     margin-bottom: 14px;
-    box-shadow: 0 3px 10px rgba(27,54,93,.25);
 }
-.summary-bar span { opacity: .9; margin: 0 8px; }
+.summary-bar span { color: #64748B; margin: 0 8px; }
 
-/* ── Rec card ────────────────────────── */
+/* ── Rec card ── */
 .rec-card {
-    background: linear-gradient(135deg, #eaf4fb, #ddeeff);
-    border-left: 5px solid #2980b9;
+    background: #0C1829;
+    border: 1px solid #1E3A5F;
+    border-left: 4px solid #3B82F6;
     border-radius: 10px;
     padding: 18px 22px;
     margin-top: 10px;
 }
 
-/* ── Section title ───────────────────── */
-.section-title {
-    font-size: 17px;
-    font-weight: 700;
-    color: #1B365D;
-    margin: 20px 0 12px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-/* ── Buttons ─────────────────────────── */
-div.stButton > button {
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-    letter-spacing: .2px !important;
-    transition: transform .15s, box-shadow .15s !important;
-}
-div.stButton > button:hover {
-    transform: translateY(-1px) !important;
-    box-shadow: 0 4px 14px rgba(0,0,0,.18) !important;
-}
-div.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #1B365D, #2c5282) !important;
-    border: none !important;
-    color: white !important;
-}
-
-/* ── Control panel ───────────────────── */
-.ctrl-panel {
-    background: white;
-    border: 1px solid #dfe1e6;
+/* ── Map wrapper ── */
+.map-wrap {
     border-radius: 10px;
-    padding: 16px 20px;
-    margin-bottom: 14px;
-    box-shadow: 0 1px 6px rgba(0,0,0,.05);
+    overflow: hidden;
+    border: 1px solid #1E2640;
+    margin-bottom: 16px;
 }
 
-/* ── Hist card ───────────────────────── */
-.hist-card {
-    background: white;
-    border: 1px solid #dfe1e6;
-    border-radius: 8px;
-    padding: 10px 14px;
-    margin-bottom: 8px;
+/* ── Section title ── */
+.section-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #F1F5F9;
+    margin: 20px 0 12px;
 }
+
+/* block-container padding ── */
+.block-container { padding-top: 1rem !important; padding-bottom: 2rem !important; }
+
 </style>
 """, unsafe_allow_html=True)
+
+# ── UI helpers ───────────────────────────────────────────────────────────────
+
+def sidebar_section(title: str, icon: str = ""):
+    st.sidebar.markdown(
+        f'<div style="color:#94A3B8;font-size:11px;font-weight:600;'
+        f'text-transform:uppercase;letter-spacing:0.08em;'
+        f'margin:20px 0 10px 0;padding-bottom:6px;'
+        f'border-bottom:1px solid #1E2640;">'
+        f'{icon}&nbsp;{title}</div>',
+        unsafe_allow_html=True)
+
+
+def status_badge(status: str) -> str:
+    styles = {
+        "Excellent": ("22C55E", "0D3320"),
+        "Good":      ("EAB308", "2D2800"),
+        "Marginal":  ("F97316", "2D1500"),
+        "Weak":      ("EF4444", "2D0D0D"),
+        "No Link":   ("475569", "1A1A1A"),
+    }
+    label = status.split()[-1] if status else "—"
+    color, bg = styles.get(label, ("94A3B8", "1A1A1A"))
+    return (f'<span style="background:#{bg};color:#{color};'
+            f'border:1px solid #{color}40;padding:2px 10px;'
+            f'border-radius:20px;font-size:11px;font-weight:600;">'
+            f'{status}</span>')
+
 
 # ── Directories & .env ────────────────────────────────────────────────────────
 
@@ -433,7 +517,7 @@ st.sidebar.markdown(
 st.sidebar.markdown("<hr style='margin:8px 0 4px;border-color:#dde1e7;'>", unsafe_allow_html=True)
 
 # API Keys
-st.sidebar.markdown("<div class='sb-section'>🔑 API Keys</div>", unsafe_allow_html=True)
+sidebar_section("API Keys", "🔑")
 with st.sidebar.expander("Configure API Keys", expanded=False):
     st.caption("Saved to local .env file — enter once.")
     ot_key_val  = os.getenv("OPENTOPOGRAPHY_API_KEY", "")
@@ -450,7 +534,7 @@ ot_api_key     = os.getenv("OPENTOPOGRAPHY_API_KEY", "")
 gemini_api_key = os.getenv("GEMINI_API_KEY", "")
 
 # Project files
-st.sidebar.markdown("<div class='sb-section'>📁 Project Files</div>", unsafe_allow_html=True)
+sidebar_section("Project Files", "📁")
 kmz_file  = st.sidebar.file_uploader("Drop KMZ / KML", type=["kmz", "kml"])
 xlsx_file = st.sidebar.file_uploader("Or drop Excel (.xlsx)", type=["xlsx"])
 
@@ -500,7 +584,7 @@ elif error_message:
     st.sidebar.error(error_message)
 
 # Equipment specs
-st.sidebar.markdown("<div class='sb-section'>📡 Equipment</div>", unsafe_allow_html=True)
+sidebar_section("Equipment", "📡")
 equip_tabs = st.sidebar.tabs(["BTS", "CPE", "PDF Import"])
 
 with equip_tabs[0]:
@@ -597,7 +681,7 @@ if st.sidebar.button("↺ Reset Equipment Defaults", use_container_width=True):
     st.rerun()
 
 # Simulation settings
-st.sidebar.markdown("<div class='sb-section-alt'>⚙️ Simulation</div>", unsafe_allow_html=True)
+sidebar_section("Simulation", "⚙️")
 
 freq_min = min(st.session_state.bts_specs.freq_min_mhz,
                st.session_state.cpe_specs.freq_min_mhz)
@@ -632,7 +716,7 @@ resolution_ui = st.sidebar.selectbox(
 resolution_val = 50.0 if "50m" in resolution_ui else (200.0 if "200m" in resolution_ui else 100.0)
 
 # Analysis mode
-st.sidebar.markdown("<div class='sb-section-alt'>🗺️ Analysis Mode</div>", unsafe_allow_html=True)
+sidebar_section("Analysis Mode", "🗺️")
 mode_choice = st.sidebar.radio(
     "Mode",
     ["🗺 Coverage Map", "📍 CPE Link Analysis"],
@@ -642,7 +726,7 @@ mode_choice = st.sidebar.radio(
 st.session_state.mode = 'coverage' if "Coverage" in mode_choice else 'cpe_analysis'
 
 # Recent simulations
-st.sidebar.markdown("<div class='sb-section'>📋 History</div>", unsafe_allow_html=True)
+sidebar_section("Recent Simulations", "📋")
 with st.sidebar.expander("Recent Simulations", expanded=False):
     hist_entries = st.session_state.history
     if not hist_entries:
@@ -673,50 +757,73 @@ if file_loaded and parsed_data:
 
 # ── Main area ─────────────────────────────────────────────────────────────────
 
-st.markdown("""
-<div class="main-header">
-  <div>
-    <h1>📡 WiFrost TVWS RF Coverage Planning Tool</h1>
-    <p>Sales planning · Link budgets · Terrain profile analysis · AI-powered recommendations</p>
-  </div>
-  <div class="header-badge">LATIN AMERICA TVWS RESELLER</div>
+st.markdown(f"""
+<div style="
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 16px 0 20px 0;
+    border-bottom: 1px solid #1E2640;
+    margin-bottom: 24px;
+">
+    <div style="display:flex; align-items:center; gap:14px">
+        <div style="
+            background: linear-gradient(135deg,#1D4ED8,#3B82F6);
+            color:white; font-weight:700; font-size:15px;
+            padding: 8px 14px; border-radius:8px; letter-spacing:0.03em;
+        ">WiFrost</div>
+        <div>
+            <div style="color:#F1F5F9; font-size:16px; font-weight:600">
+                TVWS Coverage Planning
+            </div>
+            <div style="color:#475569; font-size:12px">
+                RF Simulation · Link Analysis · Field Reports
+            </div>
+        </div>
+    </div>
+    <div style="text-align:right">
+        <div style="color:#F1F5F9; font-size:14px; font-weight:500">
+            👋 Hello, Marcelo
+        </div>
+        <div style="color:#475569; font-size:12px">
+            {datetime.datetime.now().strftime('%A %d %B %Y')}
+        </div>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
 # ── Welcome screen ────────────────────────────────────────────────────────────
 
 if not file_loaded or not parsed_data:
-    st.markdown(
-        "<div style='font-size:22px;font-weight:700;color:#1B365D;margin-bottom:4px;'>"
-        "👋 Welcome, Marcelo!</div>"
-        "<div style='color:#667;font-size:14px;margin-bottom:24px;'>"
-        "Get started by uploading your project file in the sidebar.</div>",
-        unsafe_allow_html=True)
-
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown("""
-<div class="welcome-card">
-  <div class="welcome-card-icon">📂</div>
-  <div class="welcome-card-title">Step 1 — Upload Project</div>
-  <div class="welcome-card-text">Drop a KMZ / KML file or an Excel sheet with BTS and CPE coordinates in the sidebar.</div>
-</div>""", unsafe_allow_html=True)
-    with c2:
-        st.markdown("""
-<div class="welcome-card">
-  <div class="welcome-card-icon">⚙️</div>
-  <div class="welcome-card-title">Step 2 — Check Equipment</div>
-  <div class="welcome-card-text">Review the WiFrost LT100 specs, sector azimuths, and frequency in the sidebar, or import from a PDF datasheet.</div>
-</div>""", unsafe_allow_html=True)
-    with c3:
-        st.markdown("""
-<div class="welcome-card">
-  <div class="welcome-card-icon">🚀</div>
-  <div class="welcome-card-title">Step 3 — Run &amp; Analyse</div>
-  <div class="welcome-card-text">Choose Coverage Map or CPE Link Analysis mode, type a question in plain English or Spanish, then click Run.</div>
-</div>""", unsafe_allow_html=True)
-
-    st.markdown("<div style='height:24px;'></div>", unsafe_allow_html=True)
+    st.markdown("""
+<div style="text-align:center; padding:80px 40px; color:#475569;">
+    <div style="font-size:48px; margin-bottom:16px">📡</div>
+    <div style="color:#F1F5F9; font-size:22px; font-weight:600; margin-bottom:8px">
+        Upload a project file to begin
+    </div>
+    <div style="color:#64748B; font-size:15px; margin-bottom:40px">
+        Drop a KMZ / KML or Excel file in the sidebar
+    </div>
+    <div style="display:flex; justify-content:center; gap:20px; flex-wrap:wrap; max-width:600px; margin:0 auto;">
+        <div style="background:#161B2E; border:1px solid #1E2640; border-radius:12px;
+                    padding:20px 24px; flex:1; min-width:160px; max-width:180px;">
+            <div style="font-size:24px;margin-bottom:8px">🗺</div>
+            <div style="color:#F1F5F9;font-weight:600;font-size:13px;margin-bottom:4px">Coverage Map</div>
+            <div style="color:#64748B;font-size:12px">Terrain-aware simulation</div>
+        </div>
+        <div style="background:#161B2E; border:1px solid #1E2640; border-radius:12px;
+                    padding:20px 24px; flex:1; min-width:160px; max-width:180px;">
+            <div style="font-size:24px;margin-bottom:8px">📍</div>
+            <div style="color:#F1F5F9;font-weight:600;font-size:13px;margin-bottom:4px">CPE Analysis</div>
+            <div style="color:#64748B;font-size:12px">Per-site link budget</div>
+        </div>
+        <div style="background:#161B2E; border:1px solid #1E2640; border-radius:12px;
+                    padding:20px 24px; flex:1; min-width:160px; max-width:180px;">
+            <div style="font-size:24px;margin-bottom:8px">📄</div>
+            <div style="color:#F1F5F9;font-weight:600;font-size:13px;margin-bottom:4px">PDF Reports</div>
+            <div style="color:#64748B;font-size:12px">Ready for customers</div>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
     col_dl1, col_dl2, _ = st.columns([1, 1, 2])
     with col_dl1:
@@ -1101,7 +1208,7 @@ if (st.session_state.mode == 'coverage'
         m_heat = folium.Map(
             location=[bts_lat, bts_lon],
             zoom_start=13,
-            tiles="CartoDB positron",
+            tiles="CartoDB dark_matter", prefer_canvas=True,
             control_scale=True,
         )
         add_map_controls(m_heat)
@@ -1441,7 +1548,7 @@ elif (st.session_state.mode == 'cpe_analysis'
         m_cpe = folium.Map(
             location=[bts_lat, bts_lon],
             zoom_start=13,
-            tiles="CartoDB positron",
+            tiles="CartoDB dark_matter", prefer_canvas=True,
             control_scale=True,
         )
         add_map_controls(m_cpe)
