@@ -262,6 +262,7 @@ hr {
     border-radius: 8px;
     margin-bottom: 16px;
     flex-wrap: wrap;
+    pointer-events: none;
 }
 .legend-label { font-size: 11px; font-weight: 700; color: #94A3B8; margin-right: 4px; text-transform: uppercase; letter-spacing: .05em; }
 .legend-item  { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #CBD5E1; }
