@@ -1,0 +1,93 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+:root {
+  --background: #0F1117;
+  --foreground: #F3F4F6;
+  --card: #1E293B;
+  --card-foreground: #F8FAFC;
+  --popover: #0F1117;
+  --popover-foreground: #F3F4F6;
+  --primary: #3B82F6;
+  --primary-foreground: #FFFFFF;
+  --secondary: #1E293B;
+  --secondary-foreground: #F3F4F6;
+  --muted: #334155;
+  --muted-foreground: #94A3B8;
+  --accent: #3B82F6;
+  --accent-foreground: #FFFFFF;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: #334155;
+  --input: #1E293B;
+  --ring: #3B82F6;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  overflow-x: hidden;
+}
+
+/* Custom Scrollbar for premium dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0F1117;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Leaflet dark theme wrapper and styling */
+.leaflet-container {
+  background: #0F1117 !important;
+  outline: none;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #1E293B !important;
+  color: #F3F4F6 !important;
+  border: 1px solid #334155 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.5) !important;
+}
+
+.leaflet-popup-tip {
+  background: #1E293B !important;
+  border: 1px solid #334155 !important;
+}
+
+.leaflet-bar {
+  border: 1px solid #334155 !important;
+  box-shadow: none !important;
+}
+
+.leaflet-bar a {
+  background-color: #1E293B !important;
+  color: #F3F4F6 !important;
+  border-bottom: 1px solid #334155 !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: #334155 !important;
+  color: #FFFFFF !important;
+}
+
+/* Glassmorphism utility */
+.glass-panel {
+  background: rgba(30, 41, 59, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
