@@ -70,6 +70,14 @@ function MapController({ sites, polygons, lines }: { sites: any[]; polygons: any
   return null;
 }
 
+const SECTOR_COLORS = ["#3B82F6", "#22C55E", "#F59E0B"];
+
+interface SectorInfo {
+  azimuths: number[];
+  hpbw: number;
+  radiusKm: number;
+}
+
 interface MapInnerProps {
   sites: any[];
   polygons: any[];
@@ -80,6 +88,31 @@ interface MapInnerProps {
   onSelectBts: (index: number) => void;
   selectedCpeName: string | null;
   onSelectCpe: (cpe: any) => void;
+  sectorInfo?: SectorInfo | null;
+}
+
+function sectorPolygon(
+  btsLat: number,
+  btsLon: number,
+  azimuth: number,
+  hpbw: number,
+  radiusKm: number
+): [number, number][] {
+  const points: [number, number][] = [[btsLat, btsLon]];
+  const startAngle = azimuth - hpbw / 2;
+  const endAngle = azimuth + hpbw / 2;
+  const numPts = 30;
+  const btsLatRad = (btsLat * Math.PI) / 180;
+
+  for (let i = 0; i <= numPts; i++) {
+    const angle = startAngle + (i / numPts) * (endAngle - startAngle);
+    const angleRad = (angle * Math.PI) / 180;
+    const dLat = (radiusKm / 111.32) * Math.cos(angleRad);
+    const dLon = (radiusKm / (111.32 * Math.cos(btsLatRad))) * Math.sin(angleRad);
+    points.push([btsLat + dLat, btsLon + dLon]);
+  }
+  points.push([btsLat, btsLon]);
+  return points;
 }
 
 export default function MapInner({
@@ -92,6 +125,7 @@ export default function MapInner({
   onSelectBts,
   selectedCpeName,
   onSelectCpe,
+  sectorInfo,
 }: MapInnerProps) {
   // Default center Buonaventura Colombia (SPRBUN)
   const defaultCenter: [number, number] = [3.89, -77.08];
@@ -158,6 +192,29 @@ export default function MapInner({
             style={geojsonStyle}
           />
         )}
+
+        {/* Sector wedge overlays — shown after simulation only */}
+        {sectorInfo && btsCandidates[selectedBtsIndex] &&
+          sectorInfo.azimuths.map((az, i) => {
+            const bts = btsCandidates[selectedBtsIndex];
+            const pts = sectorPolygon(bts.latitude, bts.longitude, az, sectorInfo.hpbw, sectorInfo.radiusKm);
+            const color = SECTOR_COLORS[i % SECTOR_COLORS.length];
+            return (
+              <Polygon
+                key={`sector-${i}`}
+                positions={pts}
+                pathOptions={{
+                  fillColor: color,
+                  fillOpacity: 0.12,
+                  color: color,
+                  weight: 1,
+                  dashArray: "5,5",
+                  opacity: 0.5,
+                }}
+              />
+            );
+          })
+        }
 
         {/* BTS Site Markers */}
         {btsCandidates.map((site, index) => {

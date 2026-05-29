@@ -1,10 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 import { Upload, Sliders, Play, Settings, AlertCircle, FileSpreadsheet, Compass, CheckCircle } from "lucide-react";
 import axios from "axios";
+import CompassRose from "./CompassRose";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+
+const SECTOR_COLORS = ["#3B82F6", "#22C55E", "#F59E0B"];
 
 interface SidebarProps {
   onFileParsed: (data: { sites: any[]; polygons: any[]; lines: any[] }, fileName: string) => void;
@@ -39,6 +42,13 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
   const [modelType, setModelType] = useState<string>("terrain_aware");
   const [srtmKey, setSrtmKey] = useState<string>("");
 
+  // Sector antenna state
+  const [sectorCount, setSectorCount] = useState<1 | 2 | 3>(1);
+  const [sectorAzimuths, setSectorAzimuths] = useState<number[]>([0]);
+  const [hpbw, setHpbw] = useState<number>(65.0);
+  const [vpbw, setVpbw] = useState<number>(17.0);
+  const [ftb, setFtb] = useState<number>(25.0);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch factory defaults on mount
@@ -60,6 +70,9 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
         setCpeSensitivity(cpe.receiver_sensitivity_dbm || -104.0);
         setCpeGainDbi(cpe.antenna_gain_dbi || 10.0);
         setCpeCableLossDb(cpe.cable_loss_db || 0.0);
+        setHpbw(bts.beamwidth_h_deg || 65.0);
+        setVpbw(bts.beamwidth_v_deg || 17.0);
+        setFtb(bts.front_to_back_ratio || 25.0);
       })
       .catch((err) => {
         console.error("Failed to load WiFrost defaults:", err);
@@ -127,7 +140,32 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
       rx_gain_dbi: cpeGainDbi,
       rx_cable_loss_db: cpeCableLossDb,
       rx_sensitivity_dbm: cpeSensitivity,
+      // Sector antenna params
+      sector_azimuths: sectorAzimuths.slice(0, sectorCount),
+      hpbw_deg: hpbw,
+      vpbw_deg: vpbw,
+      front_to_back_db: ftb,
     });
+  };
+
+  const handleSectorCountChange = (n: 1 | 2 | 3) => {
+    setSectorCount(n);
+    if (n === 1) setSectorAzimuths([sectorAzimuths[0] ?? 0]);
+    else if (n === 2) setSectorAzimuths([sectorAzimuths[0] ?? 0, sectorAzimuths[1] ?? 180]);
+    else setSectorAzimuths([sectorAzimuths[0] ?? 0, sectorAzimuths[1] ?? 120, sectorAzimuths[2] ?? 240]);
+  };
+
+  const handleAzimuthChange = (idx: number, value: number) => {
+    setSectorAzimuths((prev) => {
+      const next = [...prev];
+      next[idx] = ((value % 360) + 360) % 360;
+      return next;
+    });
+  };
+
+  const autoSpaceFrom0 = () => {
+    const base = sectorAzimuths[0] ?? 0;
+    setSectorAzimuths([base, (base + 120) % 360, (base + 240) % 360]);
   };
 
   return (
@@ -303,6 +341,112 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
               </div>
             </div>
           </details>
+
+          {/* ── ANTENNA SECTORS ─────────────────────────────── */}
+          <div className="border border-slate-700 rounded-lg bg-slate-950/20 overflow-hidden">
+            <div className="px-3 py-2 border-b border-slate-800 flex items-center gap-2">
+              <Compass className="w-3.5 h-3.5 text-blue-400" />
+              <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Antenna Sectors</span>
+            </div>
+            <div className="p-3 space-y-3">
+
+              {/* Sector count selector */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] text-slate-500 uppercase">Number of sectors</label>
+                <div className="grid grid-cols-3 gap-1">
+                  {([1, 2, 3] as const).map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => handleSectorCountChange(n)}
+                      className={`py-1.5 text-xs font-semibold rounded-md border transition ${
+                        sectorCount === n
+                          ? "bg-blue-600/20 border-blue-500 text-blue-300"
+                          : "bg-slate-950/40 border-slate-800 text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Live compass rose */}
+              <div className="flex justify-center py-1">
+                <CompassRose
+                  sectors={sectorAzimuths.slice(0, sectorCount).map((az, i) => ({
+                    azimuth: az,
+                    color: SECTOR_COLORS[i],
+                  }))}
+                  hpbw={hpbw}
+                  size={140}
+                  onAzimuthChange={handleAzimuthChange}
+                />
+              </div>
+
+              {/* Azimuth inputs */}
+              <div className="space-y-2">
+                {sectorAzimuths.slice(0, sectorCount).map((az, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: SECTOR_COLORS[i] }} />
+                    <label className="text-[10px] text-slate-400 w-16 flex-shrink-0">
+                      {sectorCount === 1 ? "Azimuth" : `Sector ${i + 1}`}
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={359}
+                      value={az}
+                      onChange={(e) => handleAzimuthChange(i, Number(e.target.value))}
+                      className="w-16 px-2 py-1 bg-slate-950 border border-slate-800 rounded text-xs text-white text-right"
+                    />
+                    <span className="text-[10px] text-slate-500">°</span>
+                  </div>
+                ))}
+                {sectorCount === 1 && (
+                  <p className="text-[10px] text-slate-600 leading-tight">
+                    0° = North · 90° = East · 180° = South · 270° = West
+                  </p>
+                )}
+                {sectorCount === 3 && (
+                  <button
+                    type="button"
+                    onClick={autoSpaceFrom0}
+                    className="w-full py-1.5 text-[10px] text-slate-400 border border-slate-800 rounded-lg hover:text-slate-200 hover:border-slate-600 transition"
+                  >
+                    ↺ Equal spacing from Sector 1
+                  </button>
+                )}
+              </div>
+
+              {/* Antenna pattern — collapsed by default */}
+              <details className="group">
+                <summary className="text-[10px] text-slate-500 uppercase cursor-pointer hover:text-slate-300 transition flex items-center gap-1">
+                  <span className="group-open:rotate-90 inline-block transition-transform">▶</span>
+                  Antenna Pattern
+                </summary>
+                <div className="mt-2 space-y-2 pl-3 border-l border-slate-800">
+                  <p className="text-[9px] text-slate-600">WiFrost panel defaults</p>
+                  {[
+                    { label: "H-plane HPBW (°)", val: hpbw, set: setHpbw },
+                    { label: "V-plane VPBW (°)", val: vpbw, set: setVpbw },
+                    { label: "Front/Back (dB)",  val: ftb,  set: setFtb  },
+                  ].map(({ label, val, set }) => (
+                    <div key={label} className="flex items-center justify-between gap-2">
+                      <label className="text-[10px] text-slate-400 flex-1">{label}</label>
+                      <input
+                        type="number"
+                        value={val}
+                        onChange={(e) => set(Number(e.target.value))}
+                        className="w-16 px-2 py-1 bg-slate-950 border border-slate-800 rounded text-xs text-white text-right"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </details>
+
+            </div>
+          </div>
 
           {/* CPE specs */}
           <details className="group border border-slate-850 rounded-lg bg-slate-950/20 overflow-hidden">

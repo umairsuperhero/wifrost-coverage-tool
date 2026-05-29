@@ -226,6 +226,15 @@ export default function Home() {
                 onSelectBts={handleSelectBtsMap}
                 selectedCpeName={selectedCpe?.name || null}
                 onSelectCpe={(cpe) => handleSelectCpe(cpe)}
+                sectorInfo={
+                  simulationResults && activeSimulationParams
+                    ? {
+                        azimuths: activeSimulationParams.sector_azimuths ?? [0],
+                        hpbw: activeSimulationParams.hpbw_deg ?? 65,
+                        radiusKm: simulationResults.stats.max_range_km ?? 2.0,
+                      }
+                    : null
+                }
               />
             </div>
 
@@ -282,6 +291,7 @@ export default function Home() {
                           cpeResults={cpeResults}
                           selectedCpeName={selectedCpe?.name || null}
                           onSelectCpe={(cpe) => handleSelectCpe(cpe)}
+                          sectorCount={activeSimulationParams?.sector_azimuths?.length ?? 1}
                         />
 
                         {/* Elevation profile chart */}

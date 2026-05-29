@@ -3,6 +3,9 @@
 import React, { useState } from "react";
 import { Table, Download, Search, Check, AlertTriangle, X } from "lucide-react";
 
+const SECTOR_COLORS = ["#3B82F6", "#22C55E", "#F59E0B"];
+const SECTOR_LABELS = ["S1", "S2", "S3"];
+
 interface CpeResult {
   name: string;
   distance_km: number;
@@ -12,15 +15,18 @@ interface CpeResult {
   status: string;
   latitude: number;
   longitude: number;
+  best_sector?: number;
+  best_sector_gain_db?: number;
 }
 
 interface CpeTableProps {
   cpeResults: CpeResult[];
   selectedCpeName: string | null;
   onSelectCpe: (cpe: CpeResult) => void;
+  sectorCount?: number;
 }
 
-export default function CpeTable({ cpeResults, selectedCpeName, onSelectCpe }: CpeTableProps) {
+export default function CpeTable({ cpeResults, selectedCpeName, onSelectCpe, sectorCount = 1 }: CpeTableProps) {
   const [searchTerm, setSearchTerm] = useState("");
 
   const handleExportCsv = () => {
@@ -103,13 +109,14 @@ export default function CpeTable({ cpeResults, selectedCpeName, onSelectCpe }: C
               <th className="py-3 px-4">Elevation</th>
               <th className="py-3 px-4">RSSI</th>
               <th className="py-3 px-4">Link Margin</th>
+              <th className="py-3 px-4">Sector</th>
               <th className="py-3 px-4">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-850">
             {filteredCpes.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-slate-500 text-sm">
+                <td colSpan={7} className="py-8 text-center text-slate-500 text-sm">
                   {cpeResults.length === 0 ? "No simulation data available. Run simulation first." : "No matching CPEs found."}
                 </td>
               </tr>
@@ -135,6 +142,18 @@ export default function CpeTable({ cpeResults, selectedCpeName, onSelectCpe }: C
                     </td>
                     <td className={`py-3 px-4 font-semibold ${cpe.margin_db >= 10 ? "text-emerald-400" : cpe.margin_db >= 0 ? "text-amber-400" : "text-red-400"}`}>
                       {cpe.margin_db.toFixed(1)} dB
+                    </td>
+                    <td className="py-3 px-4">
+                      {cpe.best_sector !== undefined && (cpe.best_sector_gain_db ?? 0) < -20 ? (
+                        <span className="text-amber-400 font-semibold text-xs">Gap ⚠</span>
+                      ) : cpe.best_sector !== undefined ? (
+                        <span className="flex items-center gap-1 text-xs font-semibold" style={{ color: SECTOR_COLORS[cpe.best_sector % 3] }}>
+                          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: SECTOR_COLORS[cpe.best_sector % 3] }} />
+                          {sectorCount > 1 ? SECTOR_LABELS[cpe.best_sector] : "S1"}
+                        </span>
+                      ) : (
+                        <span className="text-slate-600 text-xs">—</span>
+                      )}
                     </td>
                     <td className="py-3 px-4">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${getStatusStyle(cpe.status)}`}>

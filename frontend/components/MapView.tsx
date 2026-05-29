@@ -24,6 +24,7 @@ interface MapViewProps {
   onSelectBts: (index: number) => void;
   selectedCpeName: string | null;
   onSelectCpe: (cpe: any) => void;
+  sectorInfo?: { azimuths: number[]; hpbw: number; radiusKm: number } | null;
 }
 
 export default function MapView(props: MapViewProps) {

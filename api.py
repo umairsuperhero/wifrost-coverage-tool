@@ -1,5 +1,7 @@
 import os
 import base64
+import json
+import hashlib
 import tempfile
 from io import BytesIO
 from typing import Dict, Any, List, Optional
@@ -14,7 +16,8 @@ from wifi_frost_defaults import WifrostBTS, WifrostCPE
 from kml_parser import parse_kml_or_kmz, KMLData, KMLPoint, KMLPolygon, KMLLineString
 from excel_parser import parse_excel_sites
 from terrain import fetch_srtm, get_elevation, get_profile, haversine_distance, TerrainGrid
-from propagation import compute_eirp, compute_rssi, okumura_hata, terrain_aware_loss
+from propagation import (compute_eirp, compute_rssi, okumura_hata, terrain_aware_loss,
+                          bearing as calc_bearing, best_sector_for_point, sector_gain)
 from heatmap import compute_coverage_grid, coverage_to_geojson
 from report import generate_pdf_report
 
@@ -47,6 +50,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import hashlib
+
+# In-memory cache for simulation results (keyed by parameter hash)
+_simulation_cache: Dict[str, Any] = {}
+_CACHE_MAX_SIZE = 20
+
 # Pydantic models for request bodies
 class SimulateRequest(BaseModel):
     site_index: int
@@ -66,6 +75,11 @@ class SimulateRequest(BaseModel):
     bts_height: float
     cpe_height: float
     cpe_sensitivity: float
+    # Sector antenna configuration
+    sector_azimuths: List[float] = [0]
+    hpbw_deg: float = 65.0
+    vpbw_deg: float = 17.0
+    front_to_back_db: float = 25.0
 
 class CpeAnalysisRequest(BaseModel):
     bts_index: int
@@ -80,6 +94,10 @@ class CpeAnalysisRequest(BaseModel):
     rx_gain_dbi: float
     rx_cable_loss_db: float
     rx_sensitivity_dbm: float
+    # Sector antenna configuration
+    sector_azimuths: List[float] = [0]
+    hpbw_deg: float = 65.0
+    front_to_back_db: float = 25.0
 
 class GenerateReportRequest(BaseModel):
     project_name: str
@@ -117,7 +135,8 @@ def get_defaults():
             "freq_max_mhz": bts.freq_max_mhz,
             "antenna_height_default_m": bts.antenna_height_default_m,
             "beamwidth_h_deg": bts.beamwidth_h_deg,
-            "beamwidth_v_deg": bts.beamwidth_v_deg
+            "beamwidth_v_deg": bts.beamwidth_v_deg,
+            "front_to_back_ratio": bts.front_to_back_ratio
         },
         "cpe": {
             "model_name": cpe.model_name,
@@ -137,6 +156,11 @@ def get_defaults():
 @app.post("/api/parse-file")
 async def parse_file(file: UploadFile = File(...)):
     """Parse KMZ, KML, or Excel files containing coordinates."""
+    # Limit upload size to 50 MB
+    MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
+    content_length = file.size
+    if content_length and content_length > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail=f"File too large. Maximum size is 50 MB.")
     suffix = os.path.splitext(file.filename)[1].lower()
     if suffix not in ['.kmz', '.kml', '.xlsx']:
         raise HTTPException(status_code=400, detail="Invalid file type. Only .kmz, .kml, and .xlsx files are supported.")
@@ -221,6 +245,8 @@ def math_cos_radians(deg):
 def simulate(req: SimulateRequest):
     """Run coverage grid computation and return GeoJSON + stats."""
     # Find active BTS
+    if not req.sites:
+        raise HTTPException(status_code=400, detail="No sites provided. Upload a file with at least one site.")
     bts_candidates = [s for s in req.sites if s["is_bts_candidate"]]
     if not bts_candidates:
         # Fallback to first site if none is BTS
@@ -256,11 +282,16 @@ def simulate(req: SimulateRequest):
     eb.antenna_height_default_m = req.bts_height
     # Adjust tx_power_dbm so compute_eirp matches requested eirp_dbm
     eb.tx_power_dbm = req.eirp_dbm - eb.antenna_gain_dbi + eb.cable_loss_db
+    # Apply user-specified sector configuration
+    eb.default_sectors = len(req.sector_azimuths)
+    eb.sector_azimuths = list(req.sector_azimuths)
+    eb.horizontal_beamwidth = req.hpbw_deg
+    eb.front_to_back_ratio = req.front_to_back_db
 
     ec = WifrostCPE()
     ec.receiver_sensitivity_dbm = req.cpe_sensitivity
     ec.antenna_height_default_m = req.cpe_height
-    
+
     env = req.environment
 
     # Generate standard coverage grid
@@ -313,6 +344,30 @@ def simulate(req: SimulateRequest):
     # Generate GeoJSON using threshold_dbm = thresh_real
     geojson_data = coverage_to_geojson(grid, threshold_dbm=thresh_real)
     
+    # Cache the result for report generation
+    cache_key = hashlib.md5(json.dumps({
+        "site_index": req.site_index,
+        "frequency_mhz": req.frequency_mhz,
+        "eirp_dbm": req.eirp_dbm,
+        "bts_height": req.bts_height,
+        "cpe_height": req.cpe_height,
+        "environment": req.environment,
+        "model": req.model,
+    }, sort_keys=True).encode()).hexdigest()
+    
+    # Evict oldest entries if cache is full
+    if len(_simulation_cache) >= _CACHE_MAX_SIZE:
+        oldest_key = next(iter(_simulation_cache))
+        del _simulation_cache[oldest_key]
+    
+    _simulation_cache[cache_key] = {
+        "grid": grid,
+        "terrain_grid": terrain_grid,
+        "eb": eb,
+        "ec": ec,
+        "active_bts": active_bts,
+    }
+
     return {
         "coverage_geojson": geojson_data,
         "stats": {
@@ -345,6 +400,8 @@ def simulate(req: SimulateRequest):
 @app.post("/api/cpe-analysis")
 def cpe_analysis(req: CpeAnalysisRequest):
     """Compute path loss and link budget details for all client CPE sites."""
+    if not req.sites:
+        raise HTTPException(status_code=400, detail="No sites provided. Upload a file with at least one site.")
     bts_candidates = [s for s in req.sites if s["is_bts_candidate"]]
     if not bts_candidates:
         req.sites[0]["is_bts_candidate"] = True
@@ -364,18 +421,19 @@ def cpe_analysis(req: CpeAnalysisRequest):
     
     cpe_sites = [s for s in req.sites if not s["is_bts_candidate"]]
     cpe_results = []
-    
+
     eirp = compute_eirp(req.tx_power_dbm, req.antenna_gain_dbi, req.cable_loss_db)
-    
+    multi_sector = len(req.sector_azimuths) > 1
+
     covered_count = 0
-    
+
     for idx, s in enumerate(cpe_sites):
         d_km = haversine_distance(active_bts["latitude"], active_bts["longitude"], s["latitude"], s["longitude"])
         if d_km < 0.01:
             d_km = 0.01
-            
+
         cpe_height = s.get("height_m") or 10.0
-        
+
         if req.model == "terrain_aware" and not terrain_grid.is_flat:
             loss_db, _, _ = terrain_aware_loss(
                 active_bts["latitude"], active_bts["longitude"], req.bts_height,
@@ -384,10 +442,21 @@ def cpe_analysis(req: CpeAnalysisRequest):
             )
         else:
             loss_db = okumura_hata(d_km, req.frequency_mhz, req.bts_height, cpe_height, req.environment)
-            
-        rssi = compute_rssi(loss_db, eirp, req.rx_gain_dbi, req.rx_cable_loss_db)
+
+        # Sector gain — pick best-serving sector
+        pt_bearing = calc_bearing(active_bts["latitude"], active_bts["longitude"],
+                                   s["latitude"], s["longitude"])
+        best_sec = best_sector_for_point(
+            active_bts["latitude"], active_bts["longitude"],
+            s["latitude"], s["longitude"],
+            req.sector_azimuths, req.hpbw_deg, req.front_to_back_db
+        )
+        sg_db = sector_gain(pt_bearing, req.sector_azimuths[best_sec],
+                            req.hpbw_deg, req.front_to_back_db)
+
+        rssi = compute_rssi(loss_db, eirp, req.rx_gain_dbi, req.rx_cable_loss_db, sg_db)
         margin = rssi - req.rx_sensitivity_dbm
-        
+
         status = "🔴 Fail (No Signal)"
         if margin >= 10.0:
             status = "🟢 Pass (Excellent)"
@@ -395,7 +464,7 @@ def cpe_analysis(req: CpeAnalysisRequest):
         elif margin >= 0.0:
             status = "🟡 Pass (Marginal)"
             covered_count += 1
-            
+
         cpe_results.append({
             "name": s["name"],
             "distance_km": round(d_km, 2),
@@ -404,7 +473,9 @@ def cpe_analysis(req: CpeAnalysisRequest):
             "margin_db": round(margin, 1),
             "status": status,
             "latitude": s["latitude"],
-            "longitude": s["longitude"]
+            "longitude": s["longitude"],
+            "best_sector": best_sec,
+            "best_sector_gain_db": round(sg_db, 1),
         })
         
     total_cpes = len(cpe_sites)
@@ -424,65 +495,95 @@ def generate_report(req: GenerateReportRequest):
     """Generate and return a Base64-encoded PDF link budget report."""
     sim_params = req.simulation_params
     
-    # Re-run simulation to build CoverageGrid
-    bts_candidates = [s for s in sim_params.sites if s["is_bts_candidate"]]
-    if not bts_candidates:
-        sim_params.sites[0]["is_bts_candidate"] = True
-        bts_candidates = [sim_params.sites[0]]
+    # Try to use cached simulation data instead of re-running
+    cache_key = hashlib.md5(json.dumps({
+        "site_index": sim_params.site_index,
+        "frequency_mhz": sim_params.frequency_mhz,
+        "eirp_dbm": sim_params.eirp_dbm,
+        "bts_height": sim_params.bts_height,
+        "cpe_height": sim_params.cpe_height,
+        "environment": sim_params.environment,
+        "model": sim_params.model,
+    }, sort_keys=True).encode()).hexdigest()
+    
+    cached = _simulation_cache.get(cache_key)
+    if cached:
+        grid = cached["grid"]
+        terrain_grid = cached["terrain_grid"]
+        eb = cached["eb"]
+        ec = cached["ec"]
+        active_bts = cached["active_bts"]
+        env = sim_params.environment
+    else:
+        # Fallback: re-run simulation
+        if not sim_params.sites:
+            raise HTTPException(status_code=400, detail="No sites provided.")
+        bts_candidates = [s for s in sim_params.sites if s["is_bts_candidate"]]
+        if not bts_candidates:
+            sim_params.sites[0]["is_bts_candidate"] = True
+            bts_candidates = [sim_params.sites[0]]
+            
+        active_bts_dict = bts_candidates[sim_params.site_index]
+        active_bts = KMLPoint(
+            name=active_bts_dict["name"],
+            latitude=active_bts_dict["latitude"],
+            longitude=active_bts_dict["longitude"],
+            description=active_bts_dict.get("description", ""),
+            is_bts_candidate=True,
+            height_m=sim_params.bts_height,
+            site_type="BTS"
+        )
         
-    active_bts_dict = bts_candidates[sim_params.site_index]
-    active_bts = KMLPoint(
-        name=active_bts_dict["name"],
-        latitude=active_bts_dict["latitude"],
-        longitude=active_bts_dict["longitude"],
-        description=active_bts_dict.get("description", ""),
-        is_bts_candidate=True,
-        height_m=sim_params.bts_height,
-        site_type="BTS"
-    )
-    
-    bounds = build_bounding_box(sim_params.sites, sim_params.polygons, sim_params.lines)
-    srtm_key = sim_params.srtm_key or os.getenv("OPENTOPOGRAPHY_API_KEY", "")
-    terrain_grid = fetch_srtm(bounds, srtm_key)
-    
-    # Equipment specifications from defaults, with overrides
-    eb = WifrostBTS()
-    eb.antenna_height_default_m = sim_params.bts_height
-    # Adjust tx_power_dbm so compute_eirp matches requested eirp_dbm
-    eb.tx_power_dbm = sim_params.eirp_dbm - eb.antenna_gain_dbi + eb.cable_loss_db
+        bounds = build_bounding_box(sim_params.sites, sim_params.polygons, sim_params.lines)
+        srtm_key = sim_params.srtm_key or os.getenv("OPENTOPOGRAPHY_API_KEY", "")
+        terrain_grid = fetch_srtm(bounds, srtm_key)
+        
+        eb = WifrostBTS()
+        eb.antenna_height_default_m = sim_params.bts_height
+        eb.tx_power_dbm = sim_params.eirp_dbm - eb.antenna_gain_dbi + eb.cable_loss_db
 
-    ec = WifrostCPE()
-    ec.receiver_sensitivity_dbm = sim_params.cpe_sensitivity
-    ec.antenna_height_default_m = sim_params.cpe_height
-    env = sim_params.environment
+        ec = WifrostCPE()
+        ec.receiver_sensitivity_dbm = sim_params.cpe_sensitivity
+        ec.antenna_height_default_m = sim_params.cpe_height
+        env = sim_params.environment
 
-    # Run simulation
-    grid = compute_coverage_grid(
-        bts_site=active_bts,
-        equipment_bts=eb,
-        equipment_cpe=ec,
-        f_mhz=sim_params.frequency_mhz,
-        bounds=bounds,
-        terrain_grid=terrain_grid,
-        resolution_m=100.0,
-        model=sim_params.model,
-        environment=env,
-        bts_height_override=sim_params.bts_height
-    )
+        grid = compute_coverage_grid(
+            bts_site=active_bts,
+            equipment_bts=eb,
+            equipment_cpe=ec,
+            f_mhz=sim_params.frequency_mhz,
+            bounds=bounds,
+            terrain_grid=terrain_grid,
+            resolution_m=100.0,
+            model=sim_params.model,
+            environment=env,
+            bts_height_override=sim_params.bts_height
+        )
     
-    # Calculate link metrics
+    # Calculate link metrics at cell edge
     eirp = compute_eirp(eb.tx_power_dbm, eb.antenna_gain_dbi, eb.cable_loss_db)
     edge_dist_km = max(0.5, grid.stats["max_range_km"])
     
-    if sim_params.model == "terrain_aware" and not terrain_grid.is_flat:
-        edge_loss_db, _, _ = terrain_aware_loss(
-            active_bts.latitude, active_bts.longitude, sim_params.bts_height,
-            active_bts.latitude + 0.02, active_bts.longitude + 0.02, ec.antenna_height_default_m,
-            sim_params.frequency_mhz, terrain_grid, env
-        )
-    else:
-        edge_loss_db = okumura_hata(edge_dist_km, sim_params.frequency_mhz, sim_params.bts_height, ec.antenna_height_default_m, env)
-        
+    # Compute edge loss toward actual cell edge (use bearing from BTS)
+    import math as _math
+    edge_bearing_rad = _math.radians(45.0)  # NE diagonal as representative edge direction
+    edge_lat = active_bts.latitude + (edge_dist_km / 111.32) * _math.cos(edge_bearing_rad)
+    edge_lon = active_bts.longitude + (edge_dist_km / (111.32 * _math.cos(_math.radians(active_bts.latitude)))) * _math.sin(edge_bearing_rad)
+    
+    from propagation import terrain_aware_loss as _tal, shadowing_margin as _sm, ENVIRONMENT_SIGMA
+    edge_pl = _tal(
+        active_bts.latitude, active_bts.longitude, sim_params.bts_height,
+        edge_lat, edge_lon, ec.antenna_height_default_m,
+        sim_params.frequency_mhz, terrain_grid, env
+    )
+    
+    edge_loss_db = edge_pl.total_db
+    actual_diffraction_db = edge_pl.diffraction_db
+    actual_clutter_db = edge_pl.clutter_db
+    
+    sigma = ENVIRONMENT_SIGMA.get(env, 4.0)
+    actual_shadowing_90 = _sm(0.90, sigma)
+    
     edge_rssi_dbm = compute_rssi(edge_loss_db, eirp, ec.antenna_gain_dbi, ec.cable_loss_db)
     edge_margin_db = edge_rssi_dbm - ec.receiver_sensitivity_dbm
     
@@ -505,6 +606,10 @@ def generate_report(req: GenerateReportRequest):
         edge_loss_db=edge_loss_db,
         edge_rssi_dbm=edge_rssi_dbm,
         edge_margin_db=edge_margin_db,
+        system_margin_db=sim_params.system_margin_db,
+        shadowing_margin_90_db=actual_shadowing_90,
+        clutter_db=actual_clutter_db,
+        diffraction_db=actual_diffraction_db,
     )
     
     pdf_bytes = pdf_buffer.getvalue()
@@ -555,17 +660,15 @@ def terrain_profile(req: TerrainProfileRequest):
     los_heights = [H_tx + (d / total_dist) * (H_rx - H_tx) for d in distances]
     
     fresnel_upper, fresnel_lower = [], []
-    for d in distances:
+    for i, d in enumerate(distances):
         d2 = total_dist - d
         if d > 0 and d2 > 0 and req.frequency_mhz > 0:
             r1 = 17.3 * math.sqrt((d * d2) / (req.frequency_mhz * total_dist))
-            idx = distances.index(d)
-            fresnel_upper.append(los_heights[idx] + r1)
-            fresnel_lower.append(los_heights[idx] - r1)
+            fresnel_upper.append(los_heights[i] + r1)
+            fresnel_lower.append(los_heights[i] - r1)
         else:
-            los_h = los_heights[distances.index(d)]
-            fresnel_upper.append(los_h)
-            fresnel_lower.append(los_h)
+            fresnel_upper.append(los_heights[i])
+            fresnel_lower.append(los_heights[i])
             
     obstructed = False
     profile_data = []
