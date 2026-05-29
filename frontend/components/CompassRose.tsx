@@ -122,7 +122,6 @@ export default function CompassRose({
         {/* Tick marks every 30° */}
         {Array.from({ length: 12 }, (_, i) => i * 30).map((deg) => {
           const r1 = deg % 90 === 0 ? tickInner - 3 : tickInner;
-          const r2 = tickOuter;
           const rad = toRad(deg);
           return (
             <line
