@@ -19,6 +19,9 @@ interface CompassRoseProps {
 // Convert compass bearing (0=N, CW) to SVG radians (0=E, CW in screen coords)
 const toRad = (compassDeg: number) => ((compassDeg - 90) * Math.PI) / 180;
 
+// Round to 2 dp so SSR and client emit identical attribute strings (prevents hydration mismatch)
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
 function wedgePath(cx: number, cy: number, r: number, azimuth: number, hpbw: number): string {
   const start = toRad(azimuth - hpbw / 2);
   const end = toRad(azimuth + hpbw / 2);
@@ -124,10 +127,10 @@ export default function CompassRose({
           return (
             <line
               key={deg}
-              x1={cx + r1 * Math.cos(rad)}
-              y1={cy + r1 * Math.sin(rad)}
-              x2={cx + r2 * Math.cos(rad)}
-              y2={cy + r2 * Math.sin(rad)}
+              x1={r2(cx + r1 * Math.cos(rad))}
+              y1={r2(cy + r1 * Math.sin(rad))}
+              x2={r2(cx + tickOuter * Math.cos(rad))}
+              y2={r2(cy + tickOuter * Math.sin(rad))}
               stroke={deg % 90 === 0 ? "#2E3A50" : "#1E2640"}
               strokeWidth={deg % 90 === 0 ? 1 : 0.5}
             />
@@ -142,8 +145,8 @@ export default function CompassRose({
             return (
               <text
                 key={deg}
-                x={cx + r * Math.cos(rad)}
-                y={cy + r * Math.sin(rad)}
+                x={r2(cx + r * Math.cos(rad))}
+                y={r2(cy + r * Math.sin(rad))}
                 textAnchor="middle"
                 dominantBaseline="central"
                 fontSize="7"
@@ -160,8 +163,8 @@ export default function CompassRose({
           const path = wedgePath(cx, cy, wedgeR, sec.azimuth, hpbw);
           const labelRad = toRad(sec.azimuth);
           const labelR = wedgeR * 0.58;
-          const lx = cx + labelR * Math.cos(labelRad);
-          const ly = cy + labelR * Math.sin(labelRad);
+          const lx = r2(cx + labelR * Math.cos(labelRad));
+          const ly = r2(cy + labelR * Math.sin(labelRad));
           return (
             <g key={i}>
               <path
@@ -197,8 +200,8 @@ export default function CompassRose({
           return (
             <text
               key={label}
-              x={cx + r * Math.cos(rad)}
-              y={cy + r * Math.sin(rad)}
+              x={r2(cx + r * Math.cos(rad))}
+              y={r2(cy + r * Math.sin(rad))}
               textAnchor="middle"
               dominantBaseline="central"
               fontSize="10"
