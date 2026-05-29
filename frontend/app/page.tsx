@@ -240,6 +240,8 @@ export default function Home() {
                     projectName={fileName.replace(/\.[^/.]+$/, "")}
                     activeSimulationParams={activeSimulationParams}
                     stats={simulationResults.stats}
+                    threeScenarios={simulationResults.three_scenarios}
+                    cpeResults={cpeResults}
                   />
 
                   {/* Scenarios comparative Row */}

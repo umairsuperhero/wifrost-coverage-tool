@@ -2,12 +2,16 @@ import React, { useState } from "react";
 import { CheckCircle2, AlertTriangle, FileText, Loader2 } from "lucide-react";
 import axios from "axios";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+
 interface ResultsBannerProps {
   plainEnglishResult: string;
   coveragePct: number;
   projectName: string;
   activeSimulationParams: any;
   stats: any;
+  threeScenarios?: any;
+  cpeResults?: any[];
 }
 
 export default function ResultsBanner({
@@ -16,6 +20,8 @@ export default function ResultsBanner({
   projectName,
   activeSimulationParams,
   stats,
+  threeScenarios,
+  cpeResults,
 }: ResultsBannerProps) {
   const [downloading, setDownloading] = useState(false);
 
@@ -23,11 +29,13 @@ export default function ResultsBanner({
     if (!activeSimulationParams) return;
     try {
       setDownloading(true);
-      const res = await axios.post("http://127.0.0.1:8000/api/generate-report", {
+      const res = await axios.post(`${API_BASE}/api/generate-report`, {
         project_name: projectName || "WiFrost TVWS Project",
         simulation_params: activeSimulationParams,
         stats: stats,
         plain_english_result: plainEnglishResult,
+        three_scenarios: threeScenarios ?? null,
+        cpe_results: cpeResults ?? null,
       });
 
       const base64Pdf = res.data.pdf_base64;

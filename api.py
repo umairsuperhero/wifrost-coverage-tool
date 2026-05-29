@@ -24,11 +24,17 @@ load_dotenv()
 app = FastAPI(title="WiFrost TVWS RF Coverage API")
 
 # Configure CORS
-origins = [
-    "http://localhost:3000",
-    "http://localhost:8000",
-]
-# Add Firebase Hosting domain if set in env
+# CORS_ORIGINS env var overrides defaults (comma-separated URLs).
+# Falls back to allowing all localhost ports for local development.
+_cors_env = os.getenv("CORS_ORIGINS", "")
+if _cors_env:
+    origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
+else:
+    # Allow any localhost port in dev; Firebase domain added if set
+    origins = ["http://localhost:3000", "http://localhost:3001",
+               "http://localhost:8000", "http://127.0.0.1:3000",
+               "http://127.0.0.1:3001", "http://127.0.0.1:8000"]
+
 firebase_domain = os.getenv("FIREBASE_HOSTING_DOMAIN")
 if firebase_domain:
     origins.append(firebase_domain)
@@ -80,6 +86,8 @@ class GenerateReportRequest(BaseModel):
     simulation_params: SimulateRequest
     stats: Dict[str, Any]
     plain_english_result: str
+    three_scenarios: Optional[Dict[str, Any]] = None
+    cpe_results: Optional[List[Dict[str, Any]]] = None
 
 class TerrainProfileRequest(BaseModel):
     bts_latitude: float
@@ -489,11 +497,14 @@ def generate_report(req: GenerateReportRequest):
         equipment_cpe=ec,
         model_name="Terrain-Aware Hata" if sim_params.model == "terrain_aware" else "Flat Hata",
         environment=env,
+        conclusion_text=req.plain_english_result,
+        stats=req.stats,
+        three_scenarios=req.three_scenarios,
+        cpe_results=req.cpe_results,
+        frequency_mhz=sim_params.frequency_mhz,
         edge_loss_db=edge_loss_db,
         edge_rssi_dbm=edge_rssi_dbm,
         edge_margin_db=edge_margin_db,
-        conclusion_text=req.plain_english_result,
-        all_sites_comparison=None
     )
     
     pdf_bytes = pdf_buffer.getvalue()
