@@ -340,31 +340,62 @@ def coverage_to_geojson(coverage_grid: CoverageGrid,
 # ── PNG image for PDF ─────────────────────────────────────────────────────────
 
 def coverage_to_image(coverage_grid: CoverageGrid) -> bytes:
+    """Render RSSI grid as a PNG with coordinate labels for PDF embedding."""
     rssi_array = coverage_grid.rssi_array
     nrows, ncols = rssi_array.shape
-    img = Image.new('RGB', (ncols, nrows), color=(255, 255, 255))
-    pixels = img.load()
 
+    # Colour map
+    COLOR_ABOVE = (245, 246, 250)   # below threshold — light grey background
+    grid_img = Image.new('RGB', (ncols, nrows), color=COLOR_ABOVE)
+    pixels = grid_img.load()
     for r in range(nrows):
         for c in range(ncols):
             rssi = rssi_array[r, c]
             if rssi >= -65.0:
-                color = (46, 204, 113)
+                pixels[c, r] = (46, 204, 113)
             elif rssi >= -75.0:
-                color = (39, 174, 96)
+                pixels[c, r] = (39, 174, 96)
             elif rssi >= -85.0:
-                color = (241, 196, 15)
-            else:
-                color = (245, 246, 250)
-            pixels[c, r] = color
+                pixels[c, r] = (241, 196, 15)
 
-    new_w = max(400, ncols * 4)
-    new_h = max(400, nrows * 4)
-    img_large = img.resize((new_w, new_h), Image.Resampling.BILINEAR)
+    # Scale up for legibility in PDF
+    new_w = max(480, ncols * 4)
+    new_h = max(480, nrows * 4)
+    img = grid_img.resize((new_w, new_h), Image.Resampling.NEAREST)
 
-    draw = ImageDraw.Draw(img_large)
-    draw.rectangle([0, 0, new_w - 1, new_h - 1], outline=(120, 120, 120), width=2)
+    draw = ImageDraw.Draw(img)
+
+    # Border
+    draw.rectangle([0, 0, new_w - 1, new_h - 1], outline=(80, 80, 80), width=2)
+
+    # Coordinate labels at corners (lat/lon from grid)
+    lats = coverage_grid.lats
+    lons = coverage_grid.lons
+    if len(lats) > 0 and len(lons) > 0:
+        lat_n = f"{lats[0]:.4f}°N"
+        lat_s = f"{lats[-1]:.4f}°N"
+        lon_w = f"{lons[0]:.4f}°W" if lons[0] < 0 else f"{lons[0]:.4f}°E"
+        lon_e = f"{lons[-1]:.4f}°W" if lons[-1] < 0 else f"{lons[-1]:.4f}°E"
+
+        label_color = (60, 60, 60)
+        pad = 6
+        # Top-left
+        draw.text((pad, pad), f"{lat_n}  {lon_w}", fill=label_color)
+        # Top-right
+        tr_text = f"{lat_n}  {lon_e}"
+        draw.text((new_w - len(tr_text) * 6 - pad, pad), tr_text, fill=label_color)
+        # Bottom-left
+        draw.text((pad, new_h - 16), f"{lat_s}  {lon_w}", fill=label_color)
+        # Center top — schematic note
+        note = "RF Coverage Model — schematic (no basemap)"
+        draw.text((new_w // 2 - len(note) * 3, new_h - 16), note, fill=(120, 120, 120))
+
+    # North arrow (top-right corner)
+    ax, ay = new_w - 30, 30
+    draw.line([(ax, ay + 20), (ax, ay - 5)], fill=(40, 40, 40), width=2)
+    draw.polygon([(ax - 5, ay), (ax + 5, ay), (ax, ay - 12)], fill=(40, 40, 40))
+    draw.text((ax - 4, ay + 22), "N", fill=(40, 40, 40))
 
     buf = BytesIO()
-    img_large.save(buf, format='PNG')
+    img.save(buf, format='PNG')
     return buf.getvalue()

@@ -45,6 +45,9 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isProfileLoading, setIsProfileLoading] = useState<boolean>(false);
 
+  // Live sector state — updated immediately when user adjusts compass rose (no re-sim needed)
+  const [liveSector, setLiveSector] = useState<{ azimuths: number[]; hpbw: number }>({ azimuths: [0], hpbw: 65 });
+
   const handleFileParsed = (data: { sites: any[]; polygons: any[]; lines: any[] }, name: string) => {
     setParsedData(data);
     setFileName(name);
@@ -196,6 +199,7 @@ export default function Home() {
         onSimulate={handleSimulate}
         isLoading={isLoading}
         parsedSites={parsedData.sites}
+        onSectorChange={(azimuths, hpbw) => setLiveSector({ azimuths, hpbw })}
       />
 
       {/* Right Dashboard Area */}
@@ -214,8 +218,8 @@ export default function Home() {
         ) : (
           /* Dashboard Layout */
           <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Top half: Map View */}
-            <div className="h-[45%] w-full border-b border-slate-800 relative min-h-[300px]">
+            {/* Map View — 60% height, wedges update live from compass rose */}
+            <div className="h-[60%] w-full border-b border-slate-800 relative min-h-[360px]">
               <MapView
                 sites={parsedData.sites}
                 polygons={parsedData.polygons}
@@ -227,10 +231,10 @@ export default function Home() {
                 selectedCpeName={selectedCpe?.name || null}
                 onSelectCpe={(cpe) => handleSelectCpe(cpe)}
                 sectorInfo={
-                  simulationResults && activeSimulationParams
+                  simulationResults
                     ? {
-                        azimuths: activeSimulationParams.sector_azimuths ?? [0],
-                        hpbw: activeSimulationParams.hpbw_deg ?? 65,
+                        azimuths: liveSector.azimuths,
+                        hpbw: liveSector.hpbw,
                         radiusKm: simulationResults.stats.max_range_km ?? 2.0,
                       }
                     : null

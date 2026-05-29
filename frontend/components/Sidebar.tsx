@@ -9,14 +9,24 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
 const SECTOR_COLORS = ["#3B82F6", "#22C55E", "#F59E0B"];
 
+// Rx sensitivity = thermal noise floor + NF + SNR_min
+// kTB = -174 dBm/Hz + 10*log10(BW_Hz), NF = 8 dB, SNR_min = 3 dB
+const BW_SENSITIVITY: Record<number, number> = {
+  6:  -95,  // -174 + 67.78 + 8 + 3 = -95.2 dBm
+  12: -92,  // -174 + 70.79 + 8 + 3 = -92.2 dBm  ← default (2 × 6 MHz TV channels)
+  18: -90,  // -174 + 72.55 + 8 + 3 = -90.5 dBm
+  24: -89,  // -174 + 73.80 + 8 + 3 = -89.2 dBm
+};
+
 interface SidebarProps {
   onFileParsed: (data: { sites: any[]; polygons: any[]; lines: any[] }, fileName: string) => void;
   onSimulate: (params: any) => void;
   isLoading: boolean;
   parsedSites: any[];
+  onSectorChange?: (azimuths: number[], hpbw: number) => void;
 }
 
-export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSites }: SidebarProps) {
+export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSites, onSectorChange }: SidebarProps) {
   const [file, setFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
@@ -32,8 +42,9 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
   const [antennaGainDbi, setAntennaGainDbi] = useState<number>(13.0);
   const [cableLossDb, setCableLossDb] = useState<number>(0.0);
   
-  // CPE Receiver sensitivity
-  const [cpeSensitivity, setCpeSensitivity] = useState<number>(-104.0);
+  // Channel bandwidth → auto-computed Rx sensitivity
+  const [channelBwMhz, setChannelBwMhz] = useState<number>(12);
+  const [cpeSensitivity, setCpeSensitivity] = useState<number>(BW_SENSITIVITY[12]);
   const [cpeGainDbi, setCpeGainDbi] = useState<number>(10.0);
   const [cpeCableLossDb, setCpeCableLossDb] = useState<number>(0.0);
 
@@ -67,7 +78,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
         setTxPowerDbm(bts.tx_power_dbm || 23.0);
         setAntennaGainDbi(bts.antenna_gain_dbi || 13.0);
         setCableLossDb(bts.cable_loss_db || 0.0);
-        setCpeSensitivity(cpe.receiver_sensitivity_dbm || -104.0);
+        setCpeSensitivity(BW_SENSITIVITY[12]); // use calculated default, not datasheet value
         setCpeGainDbi(cpe.antenna_gain_dbi || 10.0);
         setCpeCableLossDb(cpe.cable_loss_db || 0.0);
         setHpbw(bts.beamwidth_h_deg || 65.0);
@@ -78,6 +89,16 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
         console.error("Failed to load WiFrost defaults:", err);
       });
   }, []);
+
+  // Auto-update sensitivity when channel bandwidth changes
+  useEffect(() => {
+    setCpeSensitivity(BW_SENSITIVITY[channelBwMhz]);
+  }, [channelBwMhz]);
+
+  // Notify parent whenever live sector config changes (keeps map wedges in sync without re-sim)
+  useEffect(() => {
+    onSectorChange?.(sectorAzimuths.slice(0, sectorCount), hpbw);
+  }, [sectorAzimuths, sectorCount, hpbw]);
 
   const btsCandidates = parsedSites.filter((s) => s.is_bts_candidate);
 
@@ -455,6 +476,29 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
               <Settings className="w-3.5 h-3.5 text-slate-500 group-open:rotate-90 transition duration-300" />
             </summary>
             <div className="p-3 border-t border-slate-850 space-y-3 bg-slate-950/10">
+              {/* Channel bandwidth → auto-computes Rx sensitivity */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] text-slate-500 uppercase">Channel Bandwidth</label>
+                <div className="grid grid-cols-4 gap-1">
+                  {[6, 12, 18, 24].map((bw) => (
+                    <button
+                      key={bw}
+                      type="button"
+                      onClick={() => setChannelBwMhz(bw)}
+                      className={`py-1 text-[10px] font-semibold rounded border transition ${
+                        channelBwMhz === bw
+                          ? "bg-blue-600/20 border-blue-500 text-blue-300"
+                          : "bg-slate-950/40 border-slate-800 text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      {bw} MHz
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[9px] text-slate-600">
+                  Sensitivity: {cpeSensitivity} dBm · kTB + 8 dB NF + 3 dB SNR
+                </p>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-[10px] text-slate-500 uppercase">CPE Height (m)</label>
@@ -466,7 +510,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 uppercase">Rx Sens. (dBm)</label>
+                  <label className="text-[10px] text-slate-500 uppercase">Rx Sensitivity (dBm)</label>
                   <input
                     type="number"
                     value={cpeSensitivity}
