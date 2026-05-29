@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.5.0] — 2026-05-29
+
+### Added
+- **Channel bandwidth selector** in CPE Config — 6 / 12 / 18 / 24 MHz buttons
+  auto-compute Rx sensitivity via `kTB + 8 dB NF + 3 dB SNR`:
+  6 MHz = −95 dBm · 12 MHz = −92 dBm (default) · 18 MHz = −90 dBm · 24 MHz = −89 dBm
+- **PDF coverage image** now includes corner lat/lon labels, north arrow (▲N),
+  and a "RF Coverage Model — schematic" watermark
+
+### Changed
+- **Map height** `h-[45%]` → `h-[60%]` with `min-h-[360px]`
+- **Sector wedges live-sync** — `onSectorChange` callback lifts sector state to
+  `page.tsx`; wedges update instantly when the user moves the compass rose or
+  types an azimuth, without requiring a re-simulation
+
+### Fixed
+- `r2 is not a function` crash in CompassRose — `const r2 = tickOuter` shadowed
+  the `r2()` rounding helper inside the tick-mark map; removed the local alias
+- CompassRose SVG hydration mismatch — `Math.sin`/`Math.cos` differ in last digit
+  between SSR and client; all computed SVG coordinate attributes rounded to 2 dp
+- `@tremor/react` removed — requires React 18, project uses React 19, unused
+
 ## [1.4.0] — 2026-05-28
 
 ### Added

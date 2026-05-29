@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# WiFrost Frontend — Next.js 16
 
-## Getting Started
+React/TypeScript frontend for the WiFrost TVWS RF Coverage Planning Tool.
+Communicates with the FastAPI backend at `http://localhost:8000` (or `NEXT_PUBLIC_API_URL`).
 
-First, run the development server:
+## Quick start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install --legacy-peer-deps
+npm run dev -- --port 3001
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open **http://localhost:3001**. The FastAPI backend must be running on port 8000 first.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# frontend/.env.local
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000        # local dev
+# NEXT_PUBLIC_API_URL=https://your-cloud-run-url  # production
+```
 
-## Learn More
+See `frontend/.env.example` for the template.
 
-To learn more about Next.js, take a look at the following resources:
+## Stack
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Package | Purpose |
+|---|---|
+| Next.js 16 (Turbopack) | Framework, SSR + static export |
+| React 19 | UI |
+| Tailwind CSS 4 | Styling |
+| react-leaflet 5 | Interactive map |
+| axios | HTTP client |
+| lucide-react | Icons |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Key components
 
-## Deploy on Vercel
+- **`Sidebar`** — file upload, simulation params, antenna sector config (compass rose + azimuth inputs), channel bandwidth selector
+- **`CompassRose`** — draggable SVG sector wedges with live azimuth sync to the map
+- **`MapInner`** — Leaflet map with coverage heatmap overlay, sector wedge polygons, BTS/CPE markers
+- **`CpeTable`** — per-CPE link analysis with Sector column and Gap ⚠ detection
+- **`ResultsBanner`** — simulation outcome summary + PDF report download
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Building for production (Firebase Hosting)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run build        # outputs to /out (static export)
+firebase deploy --only hosting
+```
+
+See `DEPLOYMENT.md` at the repo root for the full Cloud Run + Firebase flow.
