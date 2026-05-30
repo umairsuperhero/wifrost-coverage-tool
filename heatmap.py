@@ -104,12 +104,14 @@ def compute_coverage_grid(bts_site: Any, equipment_bts: Any, equipment_cpe: Any,
     rx_gain = equipment_cpe.antenna_gain_dbi
     rx_loss = equipment_cpe.cable_loss_db
 
-    # Sector params (None when omni)
+    # Sector params. Apply the directional pattern for ANY configured sector
+    # (including a single panel) so the heat-map agrees with the CPE analysis
+    # and the compass rose. A single 65° sector is NOT omnidirectional.
     n_sectors = getattr(equipment_bts, 'default_sectors', 1)
     raw_azimuths = getattr(equipment_bts, 'sector_azimuths', [0])
     hpbw = getattr(equipment_bts, 'horizontal_beamwidth', 90.0)
     ftb = getattr(equipment_bts, 'front_to_back_ratio', 25.0)
-    active_azimuths = raw_azimuths[:n_sectors] if n_sectors > 1 else None
+    active_azimuths = raw_azimuths[:max(1, n_sectors)] if raw_azimuths else None
 
     for r in range(nrows):
         lat = lats[r]
