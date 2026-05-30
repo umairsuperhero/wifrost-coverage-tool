@@ -14,9 +14,10 @@ interface MetricsRowProps {
     conservative: ScenarioStats;
   };
   activeScenarioName: "best" | "realistic" | "conservative";
+  onScenarioChange?: (scenario: "best" | "realistic" | "conservative") => void;
 }
 
-export default function MetricsRow({ threeScenarios, activeScenarioName }: MetricsRowProps) {
+export default function MetricsRow({ threeScenarios, activeScenarioName, onScenarioChange }: MetricsRowProps) {
   const getScenarioLabel = (key: string) => {
     switch (key) {
       case "best":
@@ -46,9 +47,10 @@ export default function MetricsRow({ threeScenarios, activeScenarioName }: Metri
         return (
           <div
             key={key}
-            className={`p-5 rounded-xl border transition-all duration-300 relative flex flex-col justify-between ${getBorderColor(
+            onClick={() => onScenarioChange?.(key)}
+            className={`p-5 rounded-xl border transition-all duration-300 relative flex flex-col justify-between cursor-pointer ${getBorderColor(
               key
-            )}`}
+            )} ${!isActive ? "hover:border-slate-700 hover:bg-slate-900/60" : ""}`}
           >
             {isActive && (
               <span className="absolute top-3 right-3 text-xs bg-blue-600/20 border border-blue-500/30 text-blue-400 px-2 py-0.5 rounded-full font-medium">

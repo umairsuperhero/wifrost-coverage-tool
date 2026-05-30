@@ -1,5 +1,69 @@
 # Changelog
 
+## [1.6.0] — 2026-05-30
+
+### Added
+- **`db.py`** — SQLite-backed simulation history (`data/wifrost.db`); UUID keys, WAL
+  mode, MAX_HISTORY=20 auto-trim via `save_run / list_runs / get_run / delete_run`
+- **`HistoryPanel.tsx`** — sidebar History tab; shows recent runs with coverage %,
+  max range, RSSI; refresh, delete, and reload-into-map buttons
+- **Terrain profile in PDF** — `build_pdf_terrain_profile_drawing()` in `report.py`
+  renders a vector cross-section with 1st Fresnel zone band, terrain fill, LoS
+  line, BTS/CPE antenna poles, and elevation/distance grid; embedded in CPE section
+- **`NumberedCanvas`** in `report.py` — "Page X of Y" footer via two-pass rendering
+- **`get_elevation_np()`** in `terrain.py` — vectorized bilinear elevation lookup
+  accepting NumPy arrays of lats/lons; used by vectorized coverage grid
+- History REST endpoints: `GET /api/history`, `GET /api/history/{run_id}`,
+  `DELETE /api/history/{run_id}`, `POST /api/history/{run_id}/pdf`
+- `history_id` field returned in `/api/simulate` response
+- `terrain_loaded` flag returned in simulate and CPE analysis responses
+- **Next.js dev proxy** in `next.config.ts` — `/api/*` rewrites to
+  `http://127.0.0.1:8000` in dev mode; eliminates CORS friction during development
+- **`Tooltip` component** in `Sidebar.tsx` with hover popover for parameter help text
+- **Active scenario selector** — clicking a MetricsRow scenario card switches the
+  active scenario and updates the map threshold in real time (no re-simulation)
+- **GeoJSON client-side filter** in `MapInner.tsx` — map filters by `activeThreshold`
+  so scenario switching is instant
+- `docker-compose.yml` and `frontend/Dockerfile` for containerised deployment
+- **`test_propagation_model.py`** — unit tests for propagation model
+- `defusedxml==0.7.1` in `requirements.txt`
+- CORS origins extended to include port 3002
+- `run.sh` / `run.bat` rewritten for FastAPI + Next.js stack (Streamlit removed)
+
+### Changed
+- **`compute_coverage_grid()`** in `heatmap.py` — Python double-loop replaced with
+  fully vectorised NumPy operations: `haversine_distance_np`, `bearing_np`,
+  `sector_gain_np`, `get_sector_gain_for_point_np`, `deygout_loss_np`; Okumura-Hata
+  and two-ray models evaluated element-wise; elevation profiles fetched in one
+  `get_elevation_np` batch call; max-range computation vectorised
+- **`PathLossResult.total_db`** now includes `clutter_db` (previously omitted —
+  underestimated total path loss by up to 10 dB in dense environments)
+- **`terrain_aware_loss()`** `hb_eff` lower clamp relaxed 30 m → 10 m (supports
+  low-mounted or near-ground CPE installations)
+- **Coverage map** in PDF now preserves image aspect ratio (was stretched to fixed
+  390×293 px regardless of grid shape)
+- **GeoJSON threshold** in `/api/simulate` changed from `thresh_real` → `thresh_best`
+  so the frontend can filter dynamically per scenario without re-querying
+- **`kml_parser.py`** — `ET.fromstring()` replaced with `defusedxml.fromstring()`
+- Sidebar `environment` is now a controlled React state variable
+
+### Fixed
+- **`ai_interpreter.py`** — `genai.configure()` wrapped in `threading.Lock` to
+  prevent race conditions when multiple requests configure the Gemini client
+  concurrently
+- **`shadowing_margin()`** — guard for `coverage_probability < 0.50` (previously
+  returned an undefined large negative margin)
+- **`terrain_aware_loss()`** — `warnings.warn` added when frequency is outside
+  Okumura-Hata validity range (150–1500 MHz)
+- **`fetch_srtm()`** — 1-retry on network timeout (10 s backoff); `np.loadtxt()`
+  replaces slow per-line Python parsing
+- **`get_elevation()`** — boundary check `>= ncols-1` → `> ncols-1` to include
+  terrain edge cells
+- **`compute_cpe_analysis()`** — `'d_km' in dir()` → `'d_km' in locals()` (was
+  always `False`, silently zeroing distances on exception path)
+- **`ResultsBanner.tsx`** — PDF download errors now surface via toast notification
+  instead of a blocking `alert()`
+
 ## [1.5.0] — 2026-05-29
 
 ### Added

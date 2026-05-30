@@ -25,6 +25,8 @@ interface MapViewProps {
   selectedCpeName: string | null;
   onSelectCpe: (cpe: any) => void;
   sectorInfo?: { azimuths: number[]; hpbw: number; radiusKm: number } | null;
+  activeScenario?: "best" | "realistic" | "conservative";
+  activeThreshold?: number;
 }
 
 export default function MapView(props: MapViewProps) {

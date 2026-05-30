@@ -6,6 +6,9 @@ from reportlab.lib import colors
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
                                  TableStyle, Image, PageBreak)
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.pdfgen import canvas
+from reportlab.graphics.shapes import Drawing, Rect, Line, PolyLine, String, Polygon, Circle
+from terrain import get_profile, get_elevation
 from propagation import compute_eirp
 
 # ── Palette ────────────────────────────────────────────────────────────────────
@@ -48,6 +51,31 @@ def _s(name, size=9, color=None, bold=False, align=0, leading=None, space_after=
 
 
 # ── Page decorations ───────────────────────────────────────────────────────────
+class NumberedCanvas(canvas.Canvas):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pages = []
+
+    def showPage(self):
+        self.pages.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        page_count = len(self.pages)
+        for page in self.pages:
+            self.__dict__.update(page)
+            self.draw_page_number(page_count)
+            super().showPage()
+        super().save()
+
+    def draw_page_number(self, page_count):
+        self.saveState()
+        self.setFont('Helvetica', 7)
+        self.setFillColor(C_SLATE)
+        self.drawRightString(W - 36, 32, f"Page {self._pageNumber} of {page_count}")
+        self.restoreState()
+
+
 def _draw_chrome(canvas, doc):
     canvas.saveState()
 
@@ -70,7 +98,6 @@ def _draw_chrome(canvas, doc):
     canvas.drawString(36, 32,
         "Model: Okumura-Hata + SRTM terrain. For pre-sales planning only. "
         "Field validation recommended before deployment.")
-    canvas.drawRightString(W - 36, 32, f"Page {doc.page}")
 
     canvas.restoreState()
 
@@ -115,6 +142,121 @@ def _mc(margin_db):
     return C_FAIL_BG, C_FAIL_TX
 
 
+def build_pdf_terrain_profile_drawing(
+    terrain_grid: Any,
+    bts_lat: float, bts_lon: float, bts_height_m: float,
+    rx_lat: float, rx_lon: float, rx_height_m: float,
+    f_mhz: float, cpe_name: str = "CPE", n_points: int = 100
+) -> Drawing:
+    """Returns a ReportLab vector Drawing of the terrain cross-section with Fresnel zones."""
+    import math
+
+    # Get profile data
+    profile = get_profile(terrain_grid, bts_lat, bts_lon, rx_lat, rx_lon, n_points)
+    if not profile:
+        return Drawing(540, 160)
+
+    distances = [p[0] for p in profile]
+    elevations = [p[1] for p in profile]
+    total_dist = distances[-1] if distances[-1] > 0 else 1.0
+
+    bts_elev = get_elevation(terrain_grid, bts_lat, bts_lon)
+    rx_elev = get_elevation(terrain_grid, rx_lat, rx_lon)
+    H_tx = bts_elev + bts_height_m
+    H_rx = rx_elev + rx_height_m
+
+    los_heights = [H_tx + (d / total_dist) * (H_rx - H_tx) for d in distances]
+
+    fresnel_upper, fresnel_lower = [], []
+    for d in distances:
+        d2 = total_dist - d
+        if d > 0 and d2 > 0 and f_mhz > 0:
+            r1 = 17.3 * math.sqrt((d * d2) / (f_mhz * total_dist))
+            idx = distances.index(d)
+            fresnel_upper.append(los_heights[idx] + r1)
+            fresnel_lower.append(los_heights[idx] - r1)
+        else:
+            los_h = los_heights[distances.index(d)]
+            fresnel_upper.append(los_h)
+            fresnel_lower.append(los_h)
+
+    # Scaling calculations for drawing
+    dw, dh = 540.0, 170.0
+    pad_left, pad_right, pad_top, pad_bottom = 45.0, 15.0, 15.0, 25.0
+    plot_w = dw - pad_left - pad_right
+    plot_h = dh - pad_top - pad_bottom
+
+    # Find elevation bounds
+    all_y = elevations + [H_tx, H_rx] + fresnel_upper + fresnel_lower
+    min_y = max(0.0, min(all_y) - 10.0)
+    max_y = max(all_y) + 10.0
+    y_span = max_y - min_y if max_y > min_y else 10.0
+
+    def to_plot_coords(dist, elev):
+        x = pad_left + (dist / total_dist) * plot_w
+        y = pad_bottom + ((elev - min_y) / y_span) * plot_h
+        return x, y
+
+    drawing = Drawing(dw, dh)
+
+    # Background Box
+    drawing.add(Rect(pad_left, pad_bottom, plot_w, plot_h, fillColor=colors.HexColor('#F8F9FA'), strokeColor=colors.HexColor('#E5E7EB'), strokeWidth=1))
+
+    # Grid lines (elevations)
+    n_ticks = 5
+    for i in range(n_ticks):
+        elev_tick = min_y + (i / (n_ticks - 1)) * y_span
+        _, y_pos = to_plot_coords(0, elev_tick)
+        drawing.add(Line(pad_left, y_pos, dw - pad_right, y_pos, strokeColor=colors.HexColor('#E5E7EB'), strokeWidth=0.5))
+        drawing.add(String(pad_left - 8, y_pos - 3, f"{elev_tick:.0f}m", fontName='Helvetica', fontSize=7, textAnchor='end', fillColor=colors.HexColor('#4B5563')))
+
+    # Grid lines (distances)
+    for i in range(5):
+        dist_tick = (i / 4) * total_dist
+        x_pos, _ = to_plot_coords(dist_tick, min_y)
+        drawing.add(Line(x_pos, pad_bottom, x_pos, dh - pad_top, strokeColor=colors.HexColor('#E5E7EB'), strokeWidth=0.5))
+        drawing.add(String(x_pos, pad_bottom - 10, f"{dist_tick:.1f} km", fontName='Helvetica', fontSize=7, textAnchor='middle', fillColor=colors.HexColor('#4B5563')))
+
+    # Draw 1st Fresnel zone band (sky blue)
+    fresnel_points = []
+    for d, fu in zip(distances, fresnel_upper):
+        fresnel_points.extend(to_plot_coords(d, fu))
+    for d, fl in zip(reversed(distances), reversed(fresnel_lower)):
+        fresnel_points.extend(to_plot_coords(d, fl))
+    drawing.add(Polygon(fresnel_points, fillColor=colors.HexColor('#E0F2FE'), strokeColor=colors.HexColor('#BAE6FD'), strokeWidth=0.5))
+
+    # Draw Terrain (filled beige)
+    terrain_points = []
+    x_start, y_base = to_plot_coords(0, min_y)
+    terrain_points.extend([x_start, y_base])
+    for d, elev in zip(distances, elevations):
+        terrain_points.extend(to_plot_coords(d, elev))
+    x_end, _ = to_plot_coords(total_dist, min_y)
+    terrain_points.extend([x_end, y_base])
+    drawing.add(Polygon(terrain_points, fillColor=colors.HexColor('#EFEAE4'), strokeColor=colors.HexColor('#8B5A2B'), strokeWidth=1.5))
+
+    # Line of Sight line (dashed royal blue)
+    x_tx, y_tx = to_plot_coords(0, H_tx)
+    x_rx, y_rx = to_plot_coords(total_dist, H_rx)
+    drawing.add(Line(x_tx, y_tx, x_rx, y_rx, strokeColor=colors.HexColor('#2563EB'), strokeWidth=1.5, strokeDashArray=[4, 4]))
+
+    # BTS antenna pole & emitter
+    x_bts_g, y_bts_g = to_plot_coords(0, bts_elev)
+    drawing.add(Line(x_bts_g, y_bts_g, x_tx, y_tx, strokeColor=colors.HexColor('#1E293B'), strokeWidth=2))
+    drawing.add(Circle(x_tx, y_tx, 3.5, fillColor=colors.HexColor('#DC2626'), strokeColor=colors.HexColor('#1E293B'), strokeWidth=0.5))
+
+    # CPE antenna pole & receiver
+    x_cpe_g, y_cpe_g = to_plot_coords(total_dist, rx_elev)
+    drawing.add(Line(x_cpe_g, y_cpe_g, x_rx, y_rx, strokeColor=colors.HexColor('#1E293B'), strokeWidth=2))
+    drawing.add(Circle(x_rx, y_rx, 3.5, fillColor=colors.HexColor('#10B981'), strokeColor=colors.HexColor('#1E293B'), strokeWidth=0.5))
+
+    # Labels
+    drawing.add(String(x_tx + 6, y_tx + 5, "BTS", fontName='Helvetica-Bold', fontSize=8, fillColor=colors.HexColor('#1E293B')))
+    drawing.add(String(x_rx - 6, y_rx + 5, cpe_name, fontName='Helvetica-Bold', fontSize=8, textAnchor='end', fillColor=colors.HexColor('#1E293B')))
+
+    return drawing
+
+
 # ── Main entry point ───────────────────────────────────────────────────────────
 def generate_pdf_report(
     output_stream: BytesIO,
@@ -142,6 +284,7 @@ def generate_pdf_report(
     edge_rssi_realistic_dbm: Optional[float] = None,
     edge_rssi_pessimistic_dbm: Optional[float] = None,
     all_sites_comparison: Optional[List[Dict[str, Any]]] = None,
+    terrain_grid: Optional[Any] = None,
 ) -> None:
 
     if stats is None:
@@ -172,9 +315,17 @@ def generate_pdf_report(
     ))
     story.append(Spacer(1, 10))
 
-    # Coverage map
+    # Coverage map (preserving aspect ratio)
     from heatmap import coverage_to_image
-    map_img = Image(BytesIO(coverage_to_image(coverage_grid)), width=390, height=293)
+    rssi_arr = coverage_grid.rssi_array
+    nrows_grid, ncols_grid = rssi_arr.shape
+    aspect = nrows_grid / ncols_grid
+    map_w = 390.0
+    map_h = round(map_w * aspect)
+    if map_h > 310.0:
+        map_h = 310.0
+        map_w = round(map_h / aspect)
+    map_img = Image(BytesIO(coverage_to_image(coverage_grid)), width=map_w, height=map_h)
     map_img.hAlign = 'LEFT'
 
     # KPI cards (right column)
@@ -374,8 +525,10 @@ def generate_pdf_report(
                              equipment_cpe.cable_loss_db)
 
     real_rssi = edge_rssi_realistic_dbm if edge_rssi_realistic_dbm is not None else edge_rssi_dbm
+    # Pessimistic RSSI: add clutter and additional 2 dB for interference/aging margin
+    _INTERFERENCE_AGING_DB = 2.0
     pess_rssi = (edge_rssi_pessimistic_dbm if edge_rssi_pessimistic_dbm is not None
-                 else edge_rssi_dbm - clutter_db - 2.0)
+                 else edge_rssi_dbm - clutter_db - _INTERFERENCE_AGING_DB)
     real_margin = real_rssi - equipment_cpe.receiver_sensitivity_dbm
     pess_margin = pess_rssi - equipment_cpe.receiver_sensitivity_dbm
 
@@ -493,4 +646,132 @@ def generate_pdf_report(
     ]))
     story.append(param_tbl)
 
-    doc.build(story, onFirstPage=_draw_chrome, onLaterPages=_draw_chrome)
+    # ══════════════════════════════════════════════════════════════════════════
+    # PAGE 4 — Terrain Elevation Profile (between BTS and worst CPE / edge)
+    # ══════════════════════════════════════════════════════════════════════════
+    if terrain_grid and not terrain_grid.is_flat:
+        story.append(PageBreak())
+        story.append(Paragraph("Terrain Elevation Profile Analysis",
+                               _s('P4T', 18, C_NAVY, bold=True, leading=22)))
+        
+        # Decide which end point to use for the cross-section
+        rx_name = "CPE (Cell Edge)"
+        # Default to 45 degree NE cell edge point
+        edge_dist_km = max(0.5, stats.get("max_range_km", 5.0))
+        import math as _math
+        edge_bearing_rad = _math.radians(45.0)
+        rx_lat = coverage_grid.bts_site.latitude + (edge_dist_km / 111.32) * _math.cos(edge_bearing_rad)
+        rx_lon = coverage_grid.bts_site.longitude + (edge_dist_km / (111.32 * _math.cos(_math.radians(coverage_grid.bts_site.latitude)))) * _math.sin(edge_bearing_rad)
+        
+        # If there are CPEs, choose the worst client site (lowest link margin) to analyze
+        if cpe_results and len(cpe_results) > 0:
+            sorted_cpe = sorted(cpe_results, key=lambda x: x.get('margin_db', 999))
+            worst_cpe = sorted_cpe[0]
+            rx_name = worst_cpe.get('name', 'CPE')
+            rx_lat = worst_cpe.get('lat', rx_lat)
+            rx_lon = worst_cpe.get('lon', rx_lon)
+            
+        story.append(Paragraph(
+            f"Cross-section showing 1st Fresnel zone clearance at {frequency_mhz:.0f} MHz between BTS and <b>{rx_name}</b>.",
+            _s('P4S', 9, C_DARK, leading=14),
+        ))
+        story.append(Spacer(1, 10))
+        
+        # Create and add the vector profile drawing
+        profile_drawing = build_pdf_terrain_profile_drawing(
+            terrain_grid=terrain_grid,
+            bts_lat=coverage_grid.bts_site.latitude,
+            bts_lon=coverage_grid.bts_site.longitude,
+            bts_height_m=equipment_bts.antenna_height_default_m,
+            rx_lat=rx_lat,
+            rx_lon=rx_lon,
+            rx_height_m=equipment_cpe.antenna_height_default_m,
+            f_mhz=frequency_mhz,
+            cpe_name=rx_name
+        )
+        story.append(profile_drawing)
+        story.append(Spacer(1, 10))
+        story.append(Paragraph(
+            "<b>Interpretative Note:</b> The 1st Fresnel zone represents the RF energy cylinder between antennas. "
+            "Obstacles penetrating this zone introduce diffraction attenuation. "
+            "The shaded area indicates terrain elevation from global SRTM data.",
+            _s('P4N', 8, C_SLATE, leading=12),
+        ))
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # PAGE 5 — Equipment Specifications & Methodology
+    # ══════════════════════════════════════════════════════════════════════════
+    story.append(PageBreak())
+    story.append(Paragraph("Equipment Specifications & Assumptions",
+                           _s('P5T', 18, C_NAVY, bold=True, leading=22)))
+    story.append(Paragraph(
+        "Standard TVWS network equipment specifications deployed in this simulation.",
+        _s('P5S', 9, C_SLATE, leading=14),
+    ))
+    story.append(Spacer(1, 10))
+    
+    spec_headers = [
+        Paragraph("<b>Specification</b>", _s('SHH0', 8.5, colors.white, bold=True)),
+        Paragraph("<b>BTS (Base Station)</b>", _s('SHH1', 8.5, colors.white, bold=True)),
+        Paragraph("<b>CPE (Customer Terminal)</b>", _s('SHH2', 8.5, colors.white, bold=True)),
+        Paragraph("<b>Remarks</b>", _s('SHH3', 8.5, colors.white, bold=True))
+    ]
+    
+    spec_rows = [
+        spec_headers,
+        [Paragraph("Equipment Model", _s('SP0', 8.5)),
+         Paragraph("WiFrost LT100B", _s('SPV1', 8.5)),
+         Paragraph("WiFrost LT100C", _s('SPV2', 8.5)),
+         Paragraph("Standard TVWS family", _s('SPR3', 8.5))],
+        [Paragraph("Frequency Range", _s('SP0', 8.5)),
+         Paragraph(f"{equipment_bts.freq_min_mhz}–{equipment_bts.freq_max_mhz} MHz", _s('SPV1', 8.5)),
+         Paragraph(f"{equipment_cpe.freq_min_mhz}–{equipment_cpe.freq_max_mhz} MHz", _s('SPV2', 8.5)),
+         Paragraph("UHF TV White Space bands", _s('SPR3', 8.5))],
+        [Paragraph("Maximum Tx Power", _s('SP0', 8.5)),
+         Paragraph(f"{equipment_bts.tx_power_dbm} dBm", _s('SPV1', 8.5)),
+         Paragraph(f"{equipment_cpe.tx_power_dbm} dBm", _s('SPV2', 8.5)),
+         Paragraph("FCC/MinTIC certified limits", _s('SPR3', 8.5))],
+        [Paragraph("Antenna Gain", _s('SP0', 8.5)),
+         Paragraph(f"{equipment_bts.antenna_gain_dbi} dBi", _s('SPV1', 8.5)),
+         Paragraph(f"{equipment_cpe.antenna_gain_dbi} dBi", _s('SPV2', 8.5)),
+         Paragraph("BTS sector panel / CPE panel", _s('SPR3', 8.5))],
+        [Paragraph("Cable & Connector Loss", _s('SP0', 8.5)),
+         Paragraph(f"{equipment_bts.cable_loss_db} dB", _s('SPV1', 8.5)),
+         Paragraph(f"{equipment_cpe.cable_loss_db} dB", _s('SPV2', 8.5)),
+         Paragraph("Standard RF jumpers & pigtails", _s('SPR3', 8.5))],
+        [Paragraph("Receiver Sensitivity", _s('SP0', 8.5)),
+         Paragraph(f"{equipment_bts.receiver_sensitivity_dbm} dBm", _s('SPV1', 8.5)),
+         Paragraph(f"{equipment_cpe.receiver_sensitivity_dbm} dBm", _s('SPV2', 8.5)),
+         Paragraph("MCS0 threshold (minimum sync)", _s('SPR3', 8.5))],
+        [Paragraph("Horizontal Beamwidth", _s('SP0', 8.5)),
+         Paragraph(f"{getattr(equipment_bts, 'beamwidth_h_deg', 65.0)}° sector", _s('SPV1', 8.5)),
+         Paragraph(f"{getattr(equipment_cpe, 'beamwidth_h_deg', 60.0)}° panel", _s('SPV2', 8.5)),
+         Paragraph("Directional coverage pattern", _s('SPR3', 8.5))],
+    ]
+    
+    spec_table = Table(spec_rows, colWidths=[140, 120, 120, 160])
+    spec_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), C_NAVY),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('GRID', (0, 0), (-1, -1), 0.5, C_BORDER),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, C_OFF]),
+    ]))
+    story.append(spec_table)
+    story.append(Spacer(1, 15))
+    
+    story.append(Paragraph("<b>Model Methodology & Assumptions</b>",
+                           _s('AssTitle', 10, C_NAVY, bold=True, space_after=4)))
+    story.append(Paragraph(
+        "1. <b>Empirical Propagation:</b> We employ the Okumura-Hata empirical path loss model, which is optimized for UHF frequencies. "
+        "A location-based clutter attenuation offset is applied based on the land environment chosen (Urban, Suburban, Rural).<br/>"
+        "2. <b>Terrain Profile Fading:</b> Knife-edge diffraction attenuation is modeled recursively using the Deygout algorithm (capped at 30 dB total attenuation). "
+        "Terrain profiles are built dynamically from SRTM 30m resolution topographic maps.<br/>"
+        "3. <b>Fading & Shadowing Margins:</b> Location probability is set to 90% (shadowing standard deviation is environment-dependent, typically 4–8 dB). "
+        "An additional system margin (default 18 dB) is included to protect against multi-path fading, vegetation growth, and RF noise.<br/>"
+        "4. <b>Pessimistic Scenario:</b> Incorporates a pessimistic clutter attenuation and a 95% location confidence margin, "
+        "offering a conservative baseline for high-reliability links.",
+        _s('AssContent', 8.5, C_DARK, leading=13)
+    ))
+
+    doc.build(story, onFirstPage=_draw_chrome, onLaterPages=_draw_chrome, canvasmaker=NumberedCanvas)

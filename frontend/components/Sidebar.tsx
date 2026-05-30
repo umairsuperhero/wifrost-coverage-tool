@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Upload, Sliders, Play, Settings, AlertCircle, FileSpreadsheet, Compass, CheckCircle } from "lucide-react";
+import { Upload, Sliders, Play, Settings, AlertCircle, FileSpreadsheet, Compass, CheckCircle, Database, History, HelpCircle } from "lucide-react";
 import axios from "axios";
 import CompassRose from "./CompassRose";
+import HistoryPanel from "./HistoryPanel";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
@@ -18,20 +19,76 @@ const BW_SENSITIVITY: Record<number, number> = {
   24: -89,  // -174 + 73.80 + 8 + 3 = -89.2 dBm
 };
 
+interface TooltipProps {
+  content: string;
+}
+
+const Tooltip: React.FC<TooltipProps> = ({ content }) => {
+  return (
+    <span className="relative group inline-flex items-center">
+      <HelpCircle className="w-3 h-3 text-slate-500 hover:text-slate-300 cursor-help" />
+      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-slate-950/95 backdrop-blur-md border border-slate-800 text-xs text-slate-200 font-normal rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none text-center normal-case">
+        {content}
+      </span>
+    </span>
+  );
+};
+
 interface SidebarProps {
-  onFileParsed: (data: { sites: any[]; polygons: any[]; lines: any[] }, fileName: string) => void;
+  onFileParsed: (data: any, fileName: string) => void;
   onSimulate: (params: any) => void;
   isLoading: boolean;
   parsedSites: any[];
   onSectorChange?: (azimuths: number[], hpbw: number) => void;
+  onLoadHistoryRun: (id: string) => void;
+  showToast?: (message: string, type?: "success" | "error" | "warning") => void;
 }
 
-export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSites, onSectorChange }: SidebarProps) {
+export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSites, onSectorChange, onLoadHistoryRun, showToast }: SidebarProps) {
   const [file, setFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
   const [btsDefaults, setBtsDefaults] = useState<any>(null);
   const [cpeDefaults, setCpeDefaults] = useState<any>(null);
+
+  // History states
+  const [activeTab, setActiveTab] = useState<"params" | "history">("params");
+  const [historyRuns, setHistoryRuns] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const fetchHistory = () => {
+    setLoadingHistory(true);
+    axios
+      .get(`${API_BASE}/api/history`)
+      .then((res) => {
+        setHistoryRuns(res.data.runs || []);
+      })
+      .catch((err) => {
+        console.error("Failed to load simulation history:", err);
+      })
+      .finally(() => {
+        setLoadingHistory(false);
+      });
+  };
+
+  useEffect(() => {
+    if (activeTab === "history") {
+      fetchHistory();
+    }
+  }, [activeTab]);
+
+  const handleDeleteHistoryRun = (runId: string) => {
+    if (!confirm("Are you sure you want to delete this simulation from history?")) return;
+    axios
+      .delete(`${API_BASE}/api/history/${runId}`)
+      .then(() => {
+        fetchHistory();
+      })
+      .catch((err) => {
+        console.error("Failed to delete history run:", err);
+        alert("Failed to delete history run.");
+      });
+  };
 
   // Form Fields
   const [selectedBtsIndex, setSelectedBtsIndex] = useState<number>(0);
@@ -52,6 +109,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
   const [coverageProbability, setCoverageProbability] = useState<string>("90%");
   const [modelType, setModelType] = useState<string>("terrain_aware");
   const [srtmKey, setSrtmKey] = useState<string>("");
+  const [environment, setEnvironment] = useState<string>("suburban");
 
   // Sector antenna state
   const [sectorCount, setSectorCount] = useState<1 | 2 | 3>(1);
@@ -154,7 +212,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
       cpe_height: cpeHeight,
       cpe_sensitivity: cpeSensitivity,
       // Pass CPE detailed spec for CPE analysis
-      environment: "suburban",
+      environment: environment,
       tx_power_dbm: txPowerDbm,
       antenna_gain_dbi: antennaGainDbi,
       cable_loss_db: cableLossDb,
@@ -190,8 +248,47 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
   };
 
   return (
-    <aside className="w-[380px] bg-slate-900/40 border-r border-slate-800 flex flex-col h-full overflow-y-auto">
-      {/* File Upload Section */}
+    <aside className="w-[380px] bg-slate-900/40 border-r border-slate-800 flex flex-col h-full overflow-hidden">
+      {/* Sidebar Tabs */}
+      <div className="flex border-b border-slate-800/80 bg-slate-950/20">
+        <button
+          onClick={() => setActiveTab("params")}
+          className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border-b-2 transition ${
+            activeTab === "params"
+              ? "border-blue-500 text-blue-450 font-bold bg-slate-900/10"
+              : "border-transparent text-slate-500 hover:text-slate-350"
+          }`}
+        >
+          <Sliders className="w-3.5 h-3.5" />
+          Parameters
+        </button>
+        <button
+          onClick={() => setActiveTab("history")}
+          className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border-b-2 transition ${
+            activeTab === "history"
+              ? "border-blue-500 text-blue-450 font-bold bg-slate-900/10"
+              : "border-transparent text-slate-500 hover:text-slate-350"
+          }`}
+        >
+          <History className="w-3.5 h-3.5" />
+          History
+        </button>
+      </div>
+
+      {activeTab === "history" ? (
+        <HistoryPanel
+          runs={historyRuns}
+          loading={loadingHistory}
+          onSelectRun={(id) => {
+            onLoadHistoryRun(id);
+          }}
+          onDeleteRun={handleDeleteHistoryRun}
+          onRefresh={fetchHistory}
+        />
+      ) : (
+        <>
+          <div className="flex-1 overflow-y-auto">
+            {/* File Upload Section */}
       <div className="p-5 border-b border-slate-800 space-y-4">
         <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
           <Upload className="w-4 h-4 text-blue-500" />
@@ -270,7 +367,10 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
 
           {/* Model Type */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase">Propagation Model</label>
+            <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+              Propagation Model
+              <Tooltip content="Terrain-Aware: Okumura-Hata propagation calculated over real elevation data from SRTM. Flat Hata: Standard Hata formula assuming a flat plain." />
+            </label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -297,10 +397,34 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
             </div>
           </div>
 
+          {/* Clutter Environment */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+              Clutter Environment
+              <Tooltip content="Clutter introduces clutter loss: Open (3 dB), Open Water (0 dB), Suburban (8 dB), Light Vegetation (6 dB), Dense Vegetation (15 dB), Port/Industrial (12 dB), Urban (18 dB)." />
+            </label>
+            <select
+              value={environment}
+              onChange={(e) => setEnvironment(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="open">Open / Rural Flat</option>
+              <option value="open_water">Open Water / Sea</option>
+              <option value="suburban">Suburban / Trees & Houses</option>
+              <option value="vegetation_light">Light Vegetation / Forest Edge</option>
+              <option value="vegetation_dense">Dense Vegetation / Deep Jungle</option>
+              <option value="port_industrial">Port / Industrial</option>
+              <option value="urban">Urban / Tall Structures</option>
+            </select>
+          </div>
+
           {/* Frequency & Heights */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase">Frequency (MHz)</label>
+              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+                Frequency (MHz)
+                <Tooltip content="TVWS frequencies operate between 470-670 MHz. Lower frequencies propagate further and penetrate obstacles better." />
+              </label>
               <input
                 type="number"
                 value={frequencyMhz}
@@ -311,7 +435,10 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase">BTS Height (m)</label>
+              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+                BTS Height (m)
+                <Tooltip content="Height of the base station antenna above ground level. Higher placement improves line-of-sight and clearance over obstacles." />
+              </label>
               <input
                 type="number"
                 value={btsHeight}
@@ -545,7 +672,10 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           {/* System Margin */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase">System Margin (dB)</label>
+              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+                System Margin (dB)
+                <Tooltip content="Fading and reliability safety margin in dB. Higher values require stronger signal thresholds to declare coverage (Conservative vs Realistic)." />
+              </label>
               <input
                 type="number"
                 value={systemMarginDb}
@@ -555,7 +685,10 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase">Coverage Prob.</label>
+              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+                Coverage Prob.
+                <Tooltip content="The probability that the required signal strength is achieved at any given location. 90% is industry standard." />
+              </label>
               <select
                 value={coverageProbability}
                 onChange={(e) => setCoverageProbability(e.target.value)}
@@ -572,7 +705,10 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
 
           {/* OpenTopography Key */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase">OpenTopography API Key</label>
+            <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+              OpenTopography Key
+              <Tooltip content="Your personal OpenTopography key to query terrain elevations. Leave empty to use the server's shared key." />
+            </label>
             <input
               type="password"
               placeholder="Uses server defaults if blank"
@@ -584,26 +720,30 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
         </div>
       </div>
 
-      {/* Rerun simulation button */}
-      <div className="p-5 border-t border-slate-800 bg-slate-950/20">
-        <button
-          onClick={handleSimulateClick}
-          disabled={isLoading || parsedSites.length === 0}
-          className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition duration-300 shadow-lg shadow-blue-500/10 border border-blue-500/20 cursor-pointer text-sm"
-        >
-          {isLoading ? (
-            <>
-              <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-              Running Simulation...
-            </>
-          ) : (
-            <>
-              <Play className="fill-current w-4 h-4" />
-              Run Simulation
-            </>
-          )}
-        </button>
-      </div>
+          </div>
+
+          {/* Rerun simulation button */}
+          <div className="p-5 border-t border-slate-800 bg-slate-950/20">
+            <button
+              onClick={handleSimulateClick}
+              disabled={isLoading || parsedSites.length === 0}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-750 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition duration-300 shadow-lg shadow-blue-500/10 border border-blue-500/20 cursor-pointer text-sm"
+            >
+              {isLoading ? (
+                <>
+                  <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  Running Simulation...
+                </>
+              ) : (
+                <>
+                  <Play className="fill-current w-4 h-4" />
+                  Run Simulation
+                </>
+              )}
+            </button>
+          </div>
+        </>
+      )}
     </aside>
   );
 }

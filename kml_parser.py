@@ -2,6 +2,10 @@ import zipfile
 import re
 import os
 import xml.etree.ElementTree as ET
+try:
+    from defusedxml.ElementTree import fromstring
+except ImportError:
+    from xml.etree.ElementTree import fromstring
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional
 
@@ -74,7 +78,7 @@ def parse_kml_content(kml_content: bytes) -> KMLData:
     """Parse KML XML content and extract points, polygons, and lines."""
     data = KMLData()
     try:
-        root = ET.fromstring(kml_content)
+        root = fromstring(kml_content)
     except ET.ParseError as e:
         raise ValueError(f"Failed to parse KML XML: {e}")
 

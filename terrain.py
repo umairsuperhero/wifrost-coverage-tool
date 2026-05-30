@@ -1,4 +1,5 @@
 import os
+import time
 import math
 import requests
 import numpy as np
@@ -90,8 +91,20 @@ def fetch_srtm(bounds: Dict[str, float], api_key: str = None) -> TerrainGrid:
     }
 
     try:
-        response = requests.get(url, params=params, timeout=30)
-        if response.status_code != 200:
+        response = None
+        for _attempt in range(2):  # 1 retry
+            try:
+                response = requests.get(url, params=params, timeout=30)
+                if response.status_code == 200:
+                    break
+            except requests.exceptions.Timeout:
+                if _attempt == 0:
+                    time.sleep(10)  # wait 10s before retry
+                    continue
+                return create_flat_terrain(bounds)
+            except Exception:
+                return create_flat_terrain(bounds)
+        if response is None or response.status_code != 200:
             return create_flat_terrain(bounds)
 
         content = response.text
@@ -119,13 +132,12 @@ def fetch_srtm(bounds: Dict[str, float], api_key: str = None) -> TerrainGrid:
         yllcorner = header.get('yllcorner', min_lat)
         nodata_value = header.get('nodata_value', -9999.0)
 
-        data_rows = []
-        for line in lines[data_start_idx:]:
-            stripped = line.strip()
-            if stripped:
-                data_rows.append(list(map(float, stripped.split())))
-
-        array = np.array(data_rows)
+        import io
+        try:
+            data_str = '\n'.join(lines[data_start_idx:])
+            array = np.loadtxt(io.StringIO(data_str))
+        except Exception:
+            return create_flat_terrain(bounds)
         if array.shape != (nrows, ncols):
             return create_flat_terrain(bounds)
 
@@ -167,7 +179,7 @@ def get_elevation(terrain_grid: TerrainGrid, lat: float, lon: float) -> float:
     col = (lon - xllcorner) / cellsize
     row = (top_lat - lat) / cellsize
 
-    if col < 0 or col >= ncols - 1 or row < 0 or row >= nrows - 1:
+    if col < 0 or col > ncols - 1 or row < 0 or row > nrows - 1:
         return 0.0
 
     c0 = max(0, min(int(math.floor(col)), ncols - 1))
@@ -183,6 +195,54 @@ def get_elevation(terrain_grid: TerrainGrid, lat: float, lon: float) -> float:
     val_top = clean(array[r0, c0]) * (1 - dc) + clean(array[r0, c1]) * dc
     val_bot = clean(array[r1, c0]) * (1 - dc) + clean(array[r1, c1]) * dc
     return float(val_top * (1 - dr) + val_bot * dr)
+
+
+def get_elevation_np(terrain_grid: TerrainGrid, lats: np.ndarray, lons: np.ndarray) -> np.ndarray:
+    """Vectorized bilinear-interpolated elevation lookup on NumPy arrays of lats and lons."""
+    if terrain_grid.is_flat:
+        return np.zeros_like(lats, dtype=float)
+
+    array = terrain_grid.array
+    ncols, nrows = terrain_grid.ncols, terrain_grid.nrows
+    cellsize = terrain_grid.cellsize
+    xllcorner, yllcorner = terrain_grid.xllcorner, terrain_grid.yllcorner
+    nodata_value = terrain_grid.nodata_value
+
+    top_lat = yllcorner + nrows * cellsize
+    col = (lons - xllcorner) / cellsize
+    row = (top_lat - lats) / cellsize
+
+    # Out of bounds mask
+    out_of_bounds = (col < 0) | (col > ncols - 1) | (row < 0) | (row > nrows - 1)
+
+    c0 = np.clip(np.floor(col).astype(int), 0, ncols - 1)
+    c1 = np.clip(c0 + 1, 0, ncols - 1)
+    r0 = np.clip(np.floor(row).astype(int), 0, nrows - 1)
+    r1 = np.clip(r0 + 1, 0, nrows - 1)
+
+    dc = col - c0
+    dr = row - r0
+
+    # Retrieve values
+    val_r0_c0 = array[r0, c0]
+    val_r0_c1 = array[r0, c1]
+    val_r1_c0 = array[r1, c0]
+    val_r1_c1 = array[r1, c1]
+
+    # Clean nodata / nan values
+    v_r0_c0 = np.where((val_r0_c0 == nodata_value) | np.isnan(val_r0_c0), 0.0, val_r0_c0)
+    v_r0_c1 = np.where((val_r0_c1 == nodata_value) | np.isnan(val_r0_c1), 0.0, val_r0_c1)
+    v_r1_c0 = np.where((val_r1_c0 == nodata_value) | np.isnan(val_r1_c0), 0.0, val_r1_c0)
+    v_r1_c1 = np.where((val_r1_c1 == nodata_value) | np.isnan(val_r1_c1), 0.0, val_r1_c1)
+
+    val_top = v_r0_c0 * (1.0 - dc) + v_r0_c1 * dc
+    val_bot = v_r1_c0 * (1.0 - dc) + v_r1_c1 * dc
+    elevations = val_top * (1.0 - dr) + val_bot * dr
+
+    # Apply out of bounds mask
+    elevations = np.where(out_of_bounds, 0.0, elevations)
+    return elevations
+
 
 
 def get_profile(terrain_grid: TerrainGrid,

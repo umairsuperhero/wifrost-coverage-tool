@@ -10,7 +10,7 @@ from propagation import (terrain_aware_loss, okumura_hata, compute_eirp, compute
                           get_sector_gain_for_point, best_sector_for_point,
                           PathLossResult, ENVIRONMENT_SIGMA, ENVIRONMENT_CLUTTER_LOSS,
                           shadowing_margin)
-from terrain import TerrainGrid, get_elevation
+from terrain import TerrainGrid, get_elevation, get_elevation_np
 
 
 # ── Data classes ──────────────────────────────────────────────────────────────
@@ -71,6 +71,99 @@ def cpe_line_color(rssi: float) -> str:
 
 # ── Coverage grid ─────────────────────────────────────────────────────────────
 
+# ── Vectorized propagation helpers ─────────────────────────────────────────────
+
+def haversine_distance_np(lat1: float, lon1: float, lat2_arr: np.ndarray, lon2_arr: np.ndarray) -> np.ndarray:
+    """Vectorized great-circle distance in kilometres."""
+    R = 6371.0
+    d_lat = np.radians(lat2_arr - lat1)
+    d_lon = np.radians(lon2_arr - lon1)
+    a = (np.sin(d_lat / 2.0) ** 2
+         + np.cos(np.radians(lat1)) * np.cos(np.radians(lat2_arr))
+         * np.sin(d_lon / 2.0) ** 2)
+    return R * 2.0 * np.arctan2(np.sqrt(a), np.sqrt(1.0 - a))
+
+
+def bearing_np(lat1: float, lon1: float, lat2_arr: np.ndarray, lon2_arr: np.ndarray) -> np.ndarray:
+    """Vectorized compass bearing in degrees 0-360."""
+    dlon = np.radians(lon2_arr - lon1)
+    lat1r = np.radians(lat1)
+    lat2r = np.radians(lat2_arr)
+    x = np.sin(dlon) * np.cos(lat2r)
+    y = np.cos(lat1r) * np.sin(lat2r) - np.sin(lat1r) * np.cos(lat2r) * np.cos(dlon)
+    return (np.degrees(np.arctan2(x, y)) + 360.0) % 360.0
+
+
+def sector_gain_np(point_bearing: np.ndarray, sector_azimuth: float,
+                   hpbw: float, front_to_back_ratio: float) -> np.ndarray:
+    """Vectorized antenna sector gain offset in dB."""
+    off_axis = np.abs(point_bearing - sector_azimuth) % 360.0
+    off_axis = np.where(off_axis > 180.0, 360.0 - off_axis, off_axis)
+    return -np.minimum(12.0 * (off_axis / hpbw) ** 2, front_to_back_ratio)
+
+
+def get_sector_gain_for_point_np(bts_lat: float, bts_lon: float,
+                                 rx_lat: np.ndarray, rx_lon: np.ndarray,
+                                 sector_azimuths: List[float],
+                                 hpbw: float, front_to_back_ratio: float) -> np.ndarray:
+    """Vectorized best-sector gain from BTS toward all grid cells."""
+    pt_bearing = bearing_np(bts_lat, bts_lon, rx_lat, rx_lon)
+    gains = [sector_gain_np(pt_bearing, az, hpbw, front_to_back_ratio) for az in sector_azimuths]
+    return np.maximum.reduce(gains)
+
+
+def deygout_loss_np(d_arr: np.ndarray, e_arr: np.ndarray,
+                    h_tx_asl: float, h_rx_asl: float,
+                    f_mhz: float, depth: int = 0) -> float:
+    """Recursive Deygout multi-knife-edge diffraction loss (dB), utilizing NumPy slices."""
+    if depth >= 3 or len(d_arr) < 3:
+        return 0.0
+
+    d_total = d_arr[-1]
+    if d_total <= 0:
+        return 0.0
+
+    # Intermediate points (exclude start and end)
+    d1 = d_arr[1:-1]
+    d2 = d_total - d1
+
+    los_h = h_tx_asl + (d1 / d_total) * (h_rx_asl - h_tx_asl)
+    h_above = e_arr[1:-1] - los_h
+
+    lambda_m = 300.0 / f_mhz
+    d1_m = d1 * 1000.0
+    d2_m = d2 * 1000.0
+
+    denom = lambda_m * d1_m * d2_m
+    v = np.zeros_like(h_above)
+    valid = denom > 0
+    v[valid] = h_above[valid] * np.sqrt(2.0 * (d1_m[valid] + d2_m[valid]) / denom[valid])
+
+    best_idx_rel = np.argmax(v)
+    best_v = v[best_idx_rel]
+    best_idx = best_idx_rel + 1
+
+    if best_v <= -0.7:
+        return 0.0
+
+    term = math.sqrt((best_v - 0.1) ** 2 + 1.0) + best_v - 0.1
+    obs_loss = max(0.0, 6.9 + 20.0 * math.log10(term)) if term > 0.0 else 0.0
+
+    obs_elev = e_arr[best_idx]
+
+    left_loss = deygout_loss_np(d_arr[:best_idx + 1], e_arr[:best_idx + 1],
+                                 h_tx_asl, obs_elev, f_mhz, depth + 1)
+
+    right_d = d_arr[best_idx:] - d_arr[best_idx]
+    right_e = e_arr[best_idx:]
+    right_loss = deygout_loss_np(right_d, right_e,
+                                  obs_elev, h_rx_asl, f_mhz, depth + 1)
+
+    return min(obs_loss + left_loss + right_loss, 30.0)
+
+
+# ── Coverage grid ─────────────────────────────────────────────────────────────
+
 def compute_coverage_grid(bts_site: Any, equipment_bts: Any, equipment_cpe: Any,
                           f_mhz: float, bounds: Dict[str, float],
                           terrain_grid: TerrainGrid,
@@ -78,7 +171,7 @@ def compute_coverage_grid(bts_site: Any, equipment_bts: Any, equipment_cpe: Any,
                           model: str = 'terrain_aware',
                           environment: str = 'open',
                           bts_height_override: Optional[float] = None) -> CoverageGrid:
-    """Generate a grid of RSSI values over the bounded area."""
+    """Generate a grid of RSSI values over the bounded area using parallel vectorized operations."""
     min_lat = bounds['minLat']
     max_lat = bounds['maxLat']
     min_lon = bounds['minLon']
@@ -91,7 +184,6 @@ def compute_coverage_grid(bts_site: Any, equipment_bts: Any, equipment_cpe: Any,
     lats = np.arange(max_lat, min_lat - delta_lat / 2, -delta_lat)
     lons = np.arange(min_lon, max_lon + delta_lon / 2, delta_lon)
     nrows, ncols = len(lats), len(lons)
-    rssi_array = np.zeros((nrows, ncols))
 
     bts_lat = bts_site.latitude
     bts_lon = bts_site.longitude
@@ -113,27 +205,91 @@ def compute_coverage_grid(bts_site: Any, equipment_bts: Any, equipment_cpe: Any,
     ftb = getattr(equipment_bts, 'front_to_back_ratio', 25.0)
     active_azimuths = raw_azimuths[:max(1, n_sectors)] if raw_azimuths else None
 
-    for r in range(nrows):
-        lat = lats[r]
-        for c in range(ncols):
-            lon = lons[c]
-            d_km = haversine_distance(bts_lat, bts_lon, lat, lon)
-            if d_km < 0.01:
-                d_km = 0.01
+    # Vectorized computation of distances & bearings (meshgrid)
+    lons_2d, lats_2d = np.meshgrid(lons, lats)
+    distances_km = haversine_distance_np(bts_lat, bts_lon, lats_2d, lons_2d)
+    
+    # Clamp distance to 0.01 km minimum
+    distances_km_clamped = np.maximum(0.01, distances_km)
+    
+    # Calculate ground heights
+    bts_ground = get_elevation(terrain_grid, bts_lat, bts_lon) if not terrain_grid.is_flat else 0.0
+    bts_asl = bts_ground + bts_height
+    
+    # Vectorized effective heights above CPE ground
+    if not terrain_grid.is_flat:
+        rx_grounds = get_elevation_np(terrain_grid, lats_2d, lons_2d)
+    else:
+        rx_grounds = np.zeros_like(lats_2d)
+        
+    hb_effs = np.clip(bts_asl - rx_grounds, 10.0, 200.0)
+    hm_effs = np.maximum(1.0, cpe_height)
 
-            if model == 'terrain_aware':
-                loss, _, _ = terrain_aware_loss(bts_lat, bts_lon, bts_height,
-                                                lat, lon, cpe_height,
-                                                f_mhz, terrain_grid, environment)
-            else:
-                loss = okumura_hata(d_km, f_mhz, bts_height, cpe_height, environment)
+    # Initialize loss array
+    loss_array = np.zeros((nrows, ncols))
 
-            sg_db = 0.0
-            if active_azimuths:
-                sg_db = get_sector_gain_for_point(bts_lat, bts_lon, lat, lon,
-                                                   active_azimuths, hpbw, ftb)
-            rssi_array[r, c] = compute_rssi(loss, eirp_dbm, rx_gain, rx_loss, sg_db)
+    # Base propagation loss (Hata / two-ray)
+    if environment == 'open_water':
+        # Two-ray ground-reflection model vectorized
+        two_ray = 40.0 * np.log10(distances_km_clamped * 1000.0) - 20.0 * np.log10(hb_effs) - 20.0 * np.log10(hm_effs)
+        fspl = 20.0 * np.log10(distances_km_clamped) + 20.0 * math.log10(f_mhz) + 32.44
+        loss_array = np.maximum(two_ray, fspl)
+    else:
+        # Okumura-Hata model vectorized
+        a_hm = (1.1 * math.log10(f_mhz) - 0.7) * hm_effs - (1.56 * math.log10(f_mhz) - 0.8)
+        loss = (69.55 + 26.16 * math.log10(f_mhz) - 13.82 * np.log10(hb_effs) - a_hm
+                + (44.9 - 6.55 * np.log10(hb_effs)) * np.log10(distances_km_clamped))
+        
+        if environment in ('open', 'open_water'):
+            raw_corr = 4.78 * (math.log10(f_mhz)) ** 2 - 18.33 * math.log10(f_mhz) + 40.94
+            loss -= min(raw_corr, 20.0)
+        elif environment in ('suburban', 'vegetation_light', 'vegetation_dense', 'port_industrial'):
+            loss -= 2.0 * (math.log10(f_mhz / 28.0)) ** 2 + 5.4
+            
+        fspl = 20.0 * np.log10(distances_km_clamped) + 20.0 * math.log10(f_mhz) + 32.44
+        loss_array = np.maximum(loss, fspl)
 
+    # Clutter loss
+    clutter_db = float(ENVIRONMENT_CLUTTER_LOSS.get(environment, 3))
+    loss_array += clutter_db
+
+    # If terrain aware and not flat, compute diffraction loss for each cell
+    if model == 'terrain_aware' and not terrain_grid.is_flat:
+        # Precompute profile coordinates for all cells
+        t_points = np.linspace(0, 1.0, 100) # (100,)
+        
+        # 3D coordinate grids of shape (nrows, ncols, 100)
+        lats_3d = bts_lat + t_points[np.newaxis, np.newaxis, :] * (lats_2d[:, :, np.newaxis] - bts_lat)
+        lons_3d = bts_lon + t_points[np.newaxis, np.newaxis, :] * (lons_2d[:, :, np.newaxis] - bts_lon)
+        
+        # Get elevations for all profile points at once (O(1) database/cache roundtrip)
+        elevations_flat = get_elevation_np(terrain_grid, lats_3d.ravel(), lons_3d.ravel())
+        elevations_3d = elevations_flat.reshape(nrows, ncols, 100)
+        
+        diffraction_array = np.zeros((nrows, ncols))
+        rx_asls = rx_grounds + cpe_height
+        
+        for r in range(nrows):
+            for c in range(ncols):
+                dist_km = distances_km[r, c]
+                if dist_km <= 0.05:
+                    continue
+                d_arr = dist_km * t_points
+                e_arr = elevations_3d[r, c]
+                diffraction_array[r, c] = deygout_loss_np(d_arr, e_arr, bts_asl, rx_asls[r, c], f_mhz)
+                
+        loss_array += diffraction_array
+
+    # Sector Gain
+    sg_db = np.zeros((nrows, ncols))
+    if active_azimuths:
+        sg_db = get_sector_gain_for_point_np(bts_lat, bts_lon, lats_2d, lons_2d,
+                                             active_azimuths, hpbw, ftb)
+
+    # Final RSSI array
+    rssi_array = eirp_dbm - loss_array + rx_gain - rx_loss + sg_db
+
+    # Compute statistics
     total_cells = nrows * ncols
     covered_cells = int(np.sum(rssi_array >= -85.0))
     good_cells = int(np.sum(rssi_array >= -75.0))
@@ -146,13 +302,11 @@ def compute_coverage_grid(bts_site: Any, equipment_bts: Any, equipment_cpe: Any,
     covered_rssis = rssi_array[rssi_array >= -85.0]
     avg_rssi = float(np.mean(covered_rssis)) if len(covered_rssis) > 0 else -110.0
 
-    max_range_km = 0.0
-    for r in range(nrows):
-        for c in range(ncols):
-            if rssi_array[r, c] >= -85.0:
-                dist = haversine_distance(bts_lat, bts_lon, lats[r], lons[c])
-                if dist > max_range_km:
-                    max_range_km = dist
+    # Max range calculation (fast vectorized)
+    if covered_cells > 0:
+        max_range_km = float(np.max(distances_km[rssi_array >= -85.0]))
+    else:
+        max_range_km = 0.0
 
     stats = {
         "coverage_pct": round(coverage_pct, 1),
@@ -278,7 +432,7 @@ def compute_cpe_analysis(bts_site: Any, cpe_sites: List[Any],
             results.append({
                 "name": cpe.name,
                 "lat": cpe.latitude, "lon": cpe.longitude,
-                "distance_km": round(d_km, 2) if 'd_km' in dir() else 0,
+                "distance_km": round(d_km, 2) if 'd_km' in locals() else 0,
                 "bearing_deg": 0, "best_sector": 0, "sector_gain_db": 0,
                 "terrain_loss_db": 0, "path_loss_db": 0,
                 "base_loss_db": 0, "diffraction_db": 0,

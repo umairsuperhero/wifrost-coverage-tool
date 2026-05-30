@@ -79,6 +79,8 @@ def best_sector_for_point(bts_lat: float, bts_lon: float,
 
 def shadowing_margin(coverage_probability: float, sigma_db: float) -> float:
     """One-sided log-normal shadowing margin (dB) for a given location probability."""
+    if coverage_probability < 0.50:
+        return 0.0  # no margin needed below 50% probability
     if _HAS_SCIPY:
         return float(_scipy_norm.ppf(coverage_probability) * sigma_db)
     # Piecewise-linear approximation when scipy is unavailable
@@ -90,6 +92,9 @@ def shadowing_margin(coverage_probability: float, sigma_db: float) -> float:
         if p0 <= coverage_probability <= p1:
             t = (coverage_probability - p0) / (p1 - p0)
             return (z0 + t * (z1 - z0)) * sigma_db
+    # Probability below 0.50 or above 0.99 — use 90% as safe default
+    if coverage_probability < 0.50:
+        return 0.0  # no margin needed below 50% probability
     return 1.282 * sigma_db  # default ~90 %
 
 
@@ -221,8 +226,8 @@ class PathLossResult:
 
     @property
     def total_db(self) -> float:
-        """Optimistic total loss: base propagation + diffraction only."""
-        return self.base_db + self.diffraction_db
+        """Total path loss: base propagation + diffraction + clutter."""
+        return self.base_db + self.diffraction_db + self.clutter_db
 
     def scenario_loss(self, system_margin_db: float = 0.0,
                       coverage_probability: float = 0.0,
@@ -253,13 +258,23 @@ def terrain_aware_loss(bts_lat: float, bts_lon: float, bts_height_m: float,
     """
     d_total = haversine_distance(bts_lat, bts_lon, rx_lat, rx_lon)
 
+    # Warn if frequency is outside Okumura-Hata validity range
+    if f_mhz < 150.0 or f_mhz > 1500.0:
+        import warnings
+        warnings.warn(
+            f"Frequency {f_mhz} MHz is outside Okumura-Hata validity range (150-1500 MHz). "
+            "Results may be unreliable.",
+            UserWarning,
+            stacklevel=2
+        )
+
     bts_ground = get_elevation(terrain_grid, bts_lat, bts_lon) if not terrain_grid.is_flat else 0.0
     rx_ground  = get_elevation(terrain_grid, rx_lat,  rx_lon)  if not terrain_grid.is_flat else 0.0
     bts_asl = bts_ground + bts_height_m
     rx_asl  = rx_ground  + rx_height_m
 
     # Effective BTS height: antenna ASL minus CPE ground elevation, clamped to [30, 200] m
-    hb_eff = float(max(30.0, min(200.0, bts_asl - rx_ground)))
+    hb_eff = float(max(10.0, min(200.0, bts_asl - rx_ground)))
     hm_eff = max(1.0, rx_height_m)
 
     clutter_db = float(ENVIRONMENT_CLUTTER_LOSS.get(environment, 3))

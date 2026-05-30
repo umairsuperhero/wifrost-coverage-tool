@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 import Layout from "../components/Layout";
@@ -8,19 +8,101 @@ import Sidebar from "../components/Sidebar";
 import MapView from "../components/MapView";
 import ResultsBanner from "../components/ResultsBanner";
 import MetricsRow from "../components/MetricsRow";
-import CpeTable from "../components/CpeTable";
+import CpeTable, { CpeResult } from "../components/CpeTable";
 import TerrainChart from "../components/TerrainChart";
 import ModelInfoPanel from "../components/ModelInfoPanel";
-import { Compass, HelpCircle, AlertCircle, Signal } from "lucide-react";
+import { Compass, HelpCircle, AlertCircle, Signal, CheckCircle, AlertTriangle } from "lucide-react";
 import axios from "axios";
+
+export interface Site {
+  name: string;
+  latitude: number;
+  longitude: number;
+  description?: string;
+  is_bts_candidate: boolean;
+  height_m?: number;
+  site_type?: string;
+}
+
+export interface ParsedData {
+  sites: Site[];
+  polygons: any[];
+  lines: any[];
+}
+
+export interface SimulationStats {
+  coverage_pct: number;
+  good_pct: number;
+  excellent_pct: number;
+  avg_rssi: number;
+  max_range_km: number;
+  total_area_km2: number;
+}
+
+export interface ScenarioStats {
+  coverage_pct: number;
+  good_pct: number;
+  avg_rssi: number;
+}
+
+export interface SimulationResults {
+  stats: SimulationStats;
+  plain_english_result: string;
+  coverage_geojson: any;
+  three_scenarios: {
+    best: ScenarioStats;
+    realistic: ScenarioStats;
+    conservative: ScenarioStats;
+  };
+}
+
+export interface ProfilePoint {
+  distance_km: number;
+  terrain_m: number;
+  los_m: number;
+  fresnel_lower_m: number;
+  fresnel_upper_m: number;
+}
+
+export interface TerrainProfileData {
+  profile: ProfilePoint[];
+  label: string;
+  is_flat: boolean;
+  bts_elevation?: number;
+  cpe_elevation?: number;
+  bts_total_height?: number;
+  cpe_total_height?: number;
+}
+
+export interface SimulationParams {
+  site_index: number;
+  frequency_mhz: number;
+  eirp_dbm: number;
+  system_margin_db: number;
+  coverage_probability: string;
+  model: string;
+  environment: string;
+  srtm_key: string | null;
+  sites: Site[];
+  polygons: any[];
+  lines: any[];
+  bts_height: number;
+  cpe_height: number;
+  cpe_sensitivity: number;
+  tx_power_dbm?: number;
+  antenna_gain_dbi?: number;
+  cable_loss_db?: number;
+  rx_gain_dbi?: number;
+  rx_cable_loss_db?: number;
+  rx_sensitivity_dbm?: number;
+  sector_azimuths?: number[];
+  hpbw_deg?: number;
+  front_to_back_db?: number;
+}
 
 export default function Home() {
   // Layout file data
-  const [parsedData, setParsedData] = useState<{
-    sites: any[];
-    polygons: any[];
-    lines: any[];
-  }>({
+  const [parsedData, setParsedData] = useState<ParsedData>({
     sites: [],
     polygons: [],
     lines: [],
@@ -29,13 +111,13 @@ export default function Home() {
 
   // Selection states
   const [selectedBtsIndex, setSelectedBtsIndex] = useState<number>(0);
-  const [selectedCpe, setSelectedCpe] = useState<any | null>(null);
+  const [selectedCpe, setSelectedCpe] = useState<CpeResult | null>(null);
 
   // Simulation parameters & results
-  const [activeSimulationParams, setActiveSimulationParams] = useState<any | null>(null);
-  const [simulationResults, setSimulationResults] = useState<any | null>(null);
-  const [cpeResults, setCpeResults] = useState<any[]>([]);
-  const [terrainProfile, setTerrainProfile] = useState<any | null>(null);
+  const [activeSimulationParams, setActiveSimulationParams] = useState<SimulationParams | null>(null);
+  const [simulationResults, setSimulationResults] = useState<SimulationResults | null>(null);
+  const [cpeResults, setCpeResults] = useState<CpeResult[]>([]);
+  const [terrainProfile, setTerrainProfile] = useState<TerrainProfileData | null>(null);
 
   // View States
   const [activeScenario, setActiveScenario] = useState<"best" | "realistic" | "conservative">("realistic");
@@ -48,16 +130,73 @@ export default function Home() {
   // Live sector state — updated immediately when user adjusts compass rose (no re-sim needed)
   const [liveSector, setLiveSector] = useState<{ azimuths: number[]; hpbw: number }>({ azimuths: [0], hpbw: 65 });
 
-  const handleFileParsed = (data: { sites: any[]; polygons: any[]; lines: any[] }, name: string) => {
+  // Toast State
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "warning" } | null>(null);
+
+  const showToast = useCallback((message: string, type: "success" | "error" | "warning" = "success") => {
+    setToast({ message, type });
+  }, []);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  const handleFileParsed = useCallback((data: ParsedData, name: string) => {
     setParsedData(data);
     setFileName(name);
     setSimulationResults(null);
     setCpeResults([]);
     setSelectedCpe(null);
     setTerrainProfile(null);
-  };
+  }, []);
 
-  const handleSimulate = async (params: any) => {
+  const handleSelectCpe = useCallback(async (
+    cpe: CpeResult,
+    btsIndexOverride?: number,
+    btsHeightOverride?: number,
+    cpeHeightOverride?: number,
+    frequencyOverride?: number,
+    modelOverride?: string
+  ) => {
+    setSelectedCpe(cpe);
+    setIsProfileLoading(true);
+
+    const activeBtsIdx = btsIndexOverride !== undefined ? btsIndexOverride : selectedBtsIndex;
+    const btsCandidates = parsedData.sites.filter((s) => s.is_bts_candidate);
+    
+    let activeBts = btsCandidates[activeBtsIdx];
+    if (!activeBts && parsedData.sites.length > 0) {
+      activeBts = parsedData.sites[0];
+    }
+    if (!activeBts) {
+      setIsProfileLoading(false);
+      return;
+    }
+
+    try {
+      const res = await axios.post(`${API_BASE}/api/terrain-profile`, {
+        bts_latitude: activeBts.latitude,
+        bts_longitude: activeBts.longitude,
+        bts_height: btsHeightOverride !== undefined ? btsHeightOverride : (activeSimulationParams?.bts_height || 30.0),
+        cpe_latitude: cpe.latitude,
+        cpe_longitude: cpe.longitude,
+        cpe_height: cpeHeightOverride !== undefined ? cpeHeightOverride : (activeSimulationParams?.cpe_height || 10.0),
+        frequency_mhz: frequencyOverride !== undefined ? frequencyOverride : (activeSimulationParams?.frequency_mhz || 600.0),
+        cpe_name: cpe.name,
+        sites: parsedData.sites,
+      });
+      setTerrainProfile(res.data);
+    } catch (err) {
+      console.error("Failed to fetch terrain profile:", err);
+    } finally {
+      setIsProfileLoading(false);
+    }
+  }, [selectedBtsIndex, parsedData.sites, activeSimulationParams]);
+
+  const handleSimulate = useCallback(async (params: any) => {
     setIsLoading(true);
     setTerrainProfile(null);
     setSelectedCpe(null);
@@ -123,64 +262,37 @@ export default function Home() {
       // 3. Automatically fetch the first CPE's terrain profile
       if (cpeRes.data.cpe_results.length > 0) {
         const firstCpe = cpeRes.data.cpe_results[0];
-        handleSelectCpe(
-          firstCpe,
-          params.site_index,
-          params.bts_height,
-          params.cpe_height,
-          params.frequency_mhz,
-          params.model
-        );
+        setSelectedCpe(firstCpe);
+        setIsProfileLoading(true);
+        
+        const activeBtsIdx = params.site_index;
+        const btsCandidates = parsedData.sites.filter((s) => s.is_bts_candidate);
+        let activeBts = btsCandidates[activeBtsIdx] || parsedData.sites[0];
+        if (activeBts) {
+          const profileRes = await axios.post(`${API_BASE}/api/terrain-profile`, {
+            bts_latitude: activeBts.latitude,
+            bts_longitude: activeBts.longitude,
+            bts_height: params.bts_height,
+            cpe_latitude: firstCpe.latitude,
+            cpe_longitude: firstCpe.longitude,
+            cpe_height: params.cpe_height,
+            frequency_mhz: params.frequency_mhz,
+            cpe_name: firstCpe.name,
+            sites: parsedData.sites,
+          });
+          setTerrainProfile(profileRes.data);
+        }
+        setIsProfileLoading(false);
       }
     } catch (err) {
       console.error("Simulation failed:", err);
-      alert("Error running simulation. Please verify backend connection.");
+      showToast("Error running simulation. Please verify backend connection.", "error");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [parsedData.sites, parsedData.polygons, parsedData.lines, showToast]);
 
-  const handleSelectCpe = async (
-    cpe: any,
-    btsIndexOverride?: number,
-    btsHeightOverride?: number,
-    cpeHeightOverride?: number,
-    frequencyOverride?: number,
-    modelOverride?: string
-  ) => {
-    setSelectedCpe(cpe);
-    setIsProfileLoading(true);
-
-    const activeBtsIdx = btsIndexOverride !== undefined ? btsIndexOverride : selectedBtsIndex;
-    const btsCandidates = parsedData.sites.filter((s) => s.is_bts_candidate);
-    
-    let activeBts = btsCandidates[activeBtsIdx];
-    if (!activeBts && parsedData.sites.length > 0) {
-      activeBts = parsedData.sites[0];
-    }
-    if (!activeBts) return;
-
-    try {
-      const res = await axios.post(`${API_BASE}/api/terrain-profile`, {
-        bts_latitude: activeBts.latitude,
-        bts_longitude: activeBts.longitude,
-        bts_height: btsHeightOverride !== undefined ? btsHeightOverride : (activeSimulationParams?.bts_height || 30.0),
-        cpe_latitude: cpe.latitude,
-        cpe_longitude: cpe.longitude,
-        cpe_height: cpeHeightOverride !== undefined ? cpeHeightOverride : (activeSimulationParams?.cpe_height || 10.0),
-        frequency_mhz: frequencyOverride !== undefined ? frequencyOverride : (activeSimulationParams?.frequency_mhz || 600.0),
-        cpe_name: cpe.name,
-        sites: parsedData.sites,
-      });
-      setTerrainProfile(res.data);
-    } catch (err) {
-      console.error("Failed to fetch terrain profile:", err);
-    } finally {
-      setIsProfileLoading(false);
-    }
-  };
-
-  const handleSelectBtsMap = (index: number) => {
+  const handleSelectBtsMap = useCallback((index: number) => {
     setSelectedBtsIndex(index);
     // If we have active simulation params, re-run with new BTS
     if (activeSimulationParams) {
@@ -189,7 +301,112 @@ export default function Home() {
         site_index: index,
       });
     }
-  };
+  }, [activeSimulationParams, handleSimulate]);
+
+  const handleLoadHistoryRun = useCallback(async (runId: string) => {
+    setIsLoading(true);
+    setTerrainProfile(null);
+    setSelectedCpe(null);
+    try {
+      const res = await axios.get(`${API_BASE}/api/history/${runId}`);
+      const run = res.data;
+      
+      const params = run.params_json;
+      const stats = run.stats_json;
+      const result = run.result_json;
+      const geojson = run.geojson;
+      
+      // Update parsed data from saved run
+      setParsedData({
+        sites: params.sites || [],
+        polygons: params.polygons || [],
+        lines: params.lines || [],
+      });
+      setFileName(run.project || "WiFrost Project");
+      setSelectedBtsIndex(params.site_index || 0);
+      setActiveSimulationParams(params);
+      
+      setSimulationResults({
+        coverage_geojson: geojson,
+        stats: stats,
+        plain_english_result: result.plain_english_result,
+        three_scenarios: result.three_scenarios
+      });
+      
+      // Load CPE results on the fly
+      try {
+        const cpeRes = await axios.post(`${API_BASE}/api/cpe-analysis`, {
+          bts_index: params.site_index,
+          sites: params.sites,
+          frequency_mhz: params.frequency_mhz,
+          model: params.model,
+          environment: params.environment,
+          bts_height: params.bts_height,
+          tx_power_dbm: params.tx_power_dbm ?? 23.0,
+          antenna_gain_dbi: params.antenna_gain_dbi ?? 13.0,
+          cable_loss_db: params.cable_loss_db ?? 1.5,
+          rx_gain_dbi: params.rx_gain_dbi ?? 10.0,
+          rx_cable_loss_db: params.rx_cable_loss_db ?? 0.5,
+          rx_sensitivity_dbm: params.rx_sensitivity_dbm ?? -104.0,
+          sector_azimuths: params.sector_azimuths ?? [0],
+          hpbw_deg: params.hpbw_deg ?? 65.0,
+          front_to_back_db: params.front_to_back_db ?? 25.0
+        });
+        setCpeResults(cpeRes.data.cpe_results);
+        
+        if (cpeRes.data.cpe_results.length > 0) {
+          // Select the first CPE to display terrain profile
+          const firstCpe = cpeRes.data.cpe_results[0];
+          setSelectedCpe(firstCpe);
+          setIsProfileLoading(true);
+          
+          const btsCandidates = (params.sites || []).filter((s: any) => s.is_bts_candidate);
+          let activeBts = btsCandidates[params.site_index];
+          if (!activeBts && (params.sites || []).length > 0) {
+            activeBts = params.sites[0];
+          }
+          
+          if (activeBts) {
+            const profileRes = await axios.post(`${API_BASE}/api/terrain-profile`, {
+              bts_latitude: activeBts.latitude,
+              bts_longitude: activeBts.longitude,
+              bts_height: params.bts_height,
+              cpe_latitude: firstCpe.latitude,
+              cpe_longitude: firstCpe.longitude,
+              cpe_height: params.cpe_height,
+              frequency_mhz: params.frequency_mhz,
+              cpe_name: firstCpe.name,
+              sites: params.sites,
+            });
+            setTerrainProfile(profileRes.data);
+          }
+          setIsProfileLoading(false);
+        }
+      } catch (cpeErr) {
+        console.error("Failed to run CPE analysis for historical run:", cpeErr);
+        setCpeResults([]);
+        setIsProfileLoading(false);
+      }
+      showToast("Successfully loaded simulation: " + (run.project || "WiFrost Project"), "success");
+    } catch (err) {
+      console.error("Failed to load historical run:", err);
+      showToast("Failed to load historical simulation.", "error");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showToast]);
+
+  const margin_real = activeSimulationParams?.system_margin_db ?? 15.0;
+  const margin_best = Math.max(0.0, margin_real - 5.0);
+  const margin_cons = margin_real + 5.0;
+  const sensitivity = activeSimulationParams?.cpe_sensitivity ?? -104.0;
+
+  let activeThreshold = sensitivity + margin_real;
+  if (activeScenario === "best") {
+    activeThreshold = sensitivity + margin_best;
+  } else if (activeScenario === "conservative") {
+    activeThreshold = sensitivity + margin_cons;
+  }
 
   return (
     <Layout>
@@ -200,10 +417,12 @@ export default function Home() {
         isLoading={isLoading}
         parsedSites={parsedData.sites}
         onSectorChange={(azimuths, hpbw) => setLiveSector({ azimuths, hpbw })}
+        onLoadHistoryRun={handleLoadHistoryRun}
+        showToast={showToast}
       />
 
       {/* Right Dashboard Area */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#0A0D14]">
+      <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#0F1117]">
         {parsedData.sites.length === 0 ? (
           /* Empty State */
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-400">
@@ -230,6 +449,8 @@ export default function Home() {
                 onSelectBts={handleSelectBtsMap}
                 selectedCpeName={selectedCpe?.name || null}
                 onSelectCpe={(cpe) => handleSelectCpe(cpe)}
+                activeScenario={activeScenario}
+                activeThreshold={activeThreshold}
                 sectorInfo={
                   simulationResults
                     ? {
@@ -255,12 +476,14 @@ export default function Home() {
                     stats={simulationResults.stats}
                     threeScenarios={simulationResults.three_scenarios}
                     cpeResults={cpeResults}
+                    showToast={showToast}
                   />
 
                   {/* Scenarios comparative Row */}
                   <MetricsRow
                     threeScenarios={simulationResults.three_scenarios}
                     activeScenarioName={activeScenario}
+                    onScenarioChange={setActiveScenario}
                   />
 
                   {/* Details Tabs */}
@@ -348,6 +571,22 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      {/* Slide-in Toast Notification */}
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-3 px-4 py-3 rounded-xl border shadow-2xl backdrop-blur-md transition-all duration-300 animate-fade-in-up ${
+          toast.type === "success"
+            ? "bg-emerald-950/95 border-emerald-500/30 text-emerald-200"
+            : toast.type === "error"
+            ? "bg-red-950/95 border-red-500/30 text-red-200"
+            : "bg-amber-950/95 border-amber-500/30 text-amber-200"
+        }`}>
+          {toast.type === "success" && <CheckCircle className="w-5 h-5 text-emerald-400" />}
+          {toast.type === "error" && <AlertCircle className="w-5 h-5 text-red-400" />}
+          {toast.type === "warning" && <AlertTriangle className="w-5 h-5 text-amber-400" />}
+          <span className="text-sm font-semibold text-white">{toast.message}</span>
+        </div>
+      )}
     </Layout>
   );
 }

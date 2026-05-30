@@ -20,6 +20,10 @@ from propagation import (compute_eirp, compute_rssi, okumura_hata, terrain_aware
                           bearing as calc_bearing, best_sector_for_point, sector_gain)
 from heatmap import compute_coverage_grid, coverage_to_geojson
 from report import generate_pdf_report
+import db
+
+# Base Directory for database
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Load environment variables
 load_dotenv()
@@ -35,8 +39,9 @@ if _cors_env:
 else:
     # Allow any localhost port in dev; Firebase domain added if set
     origins = ["http://localhost:3000", "http://localhost:3001",
-               "http://localhost:8000", "http://127.0.0.1:3000",
-               "http://127.0.0.1:3001", "http://127.0.0.1:8000"]
+               "http://localhost:3002", "http://localhost:8000",
+               "http://127.0.0.1:3000", "http://127.0.0.1:3001",
+               "http://127.0.0.1:3002", "http://127.0.0.1:8000"]
 
 firebase_domain = os.getenv("FIREBASE_HOSTING_DOMAIN")
 if firebase_domain:
@@ -341,8 +346,8 @@ def simulate(req: SimulateRequest):
     if cov_real < 85.0:
         plain_english = f"The site {active_bts.name} only covers {cov_real:.1f}%. Consider increasing height or using an alternative location."
         
-    # Generate GeoJSON using threshold_dbm = thresh_real
-    geojson_data = coverage_to_geojson(grid, threshold_dbm=thresh_real)
+    # Generate GeoJSON using threshold_dbm = thresh_best so frontend can filter dynamically
+    geojson_data = coverage_to_geojson(grid, threshold_dbm=thresh_best)
     
     # Cache the result for report generation
     cache_key = hashlib.md5(json.dumps({
@@ -368,14 +373,66 @@ def simulate(req: SimulateRequest):
         "active_bts": active_bts,
     }
 
+    # PERSIST TO SQLITE HISTORY
+    history_id = None
+    try:
+        project_name = "WiFrost Project"
+        history_id = db.save_run(
+            base_dir=BASE_DIR,
+            project_name=project_name,
+            bts_name=active_bts.name,
+            bts_lat=active_bts.latitude,
+            bts_lon=active_bts.longitude,
+            frequency_mhz=req.frequency_mhz,
+            eirp_dbm=req.eirp_dbm,
+            environment=req.environment,
+            model=req.model,
+            coverage_pct=round(cov_real, 1),
+            max_range_km=grid.stats["max_range_km"],
+            avg_rssi=round(avg_real, 1),
+            params=req.dict(),
+            stats={
+                "coverage_pct": round(cov_real, 1),
+                "good_pct": round(good_real, 1),
+                "avg_rssi": round(avg_real, 1),
+                "max_range_km": grid.stats["max_range_km"],
+                "total_area_km2": grid.stats["total_area_km2"]
+            },
+            result={
+                "plain_english_result": plain_english,
+                "three_scenarios": {
+                    "best": {
+                        "coverage_pct": round(cov_best, 1),
+                        "good_pct": round(good_best, 1),
+                        "avg_rssi": round(avg_best, 1)
+                    },
+                    "realistic": {
+                        "coverage_pct": round(cov_real, 1),
+                        "good_pct": round(good_real, 1),
+                        "avg_rssi": round(avg_real, 1)
+                    },
+                    "conservative": {
+                        "coverage_pct": round(cov_cons, 1),
+                        "good_pct": round(good_cons, 1),
+                        "avg_rssi": round(avg_cons, 1)
+                    }
+                }
+            },
+            geojson=geojson_data
+        )
+    except Exception as e:
+        print(f"Error saving simulation to history: {e}")
+
     return {
+        "history_id": history_id,
         "coverage_geojson": geojson_data,
         "stats": {
             "coverage_pct": round(cov_real, 1),
             "good_pct": round(good_real, 1),
             "avg_rssi": round(avg_real, 1),
             "max_range_km": grid.stats["max_range_km"],
-            "total_area_km2": grid.stats["total_area_km2"]
+            "total_area_km2": grid.stats["total_area_km2"],
+            "terrain_loaded": not terrain_grid.is_flat
         },
         "plain_english_result": plain_english,
         "three_scenarios": {
@@ -394,7 +451,8 @@ def simulate(req: SimulateRequest):
                 "good_pct": round(good_cons, 1),
                 "avg_rssi": round(avg_cons, 1)
             }
-        }
+        },
+        "terrain_loaded": not terrain_grid.is_flat
     }
 
 @app.post("/api/cpe-analysis")
@@ -486,8 +544,10 @@ def cpe_analysis(req: CpeAnalysisRequest):
         "summary_stats": {
             "total_cpes": total_cpes,
             "covered_cpes": covered_count,
-            "coverage_pct": coverage_pct
-        }
+            "coverage_pct": coverage_pct,
+            "terrain_loaded": not terrain_grid.is_flat
+        },
+        "terrain_loaded": not terrain_grid.is_flat
     }
 
 @app.post("/api/generate-report")
@@ -610,6 +670,7 @@ def generate_report(req: GenerateReportRequest):
         shadowing_margin_90_db=actual_shadowing_90,
         clutter_db=actual_clutter_db,
         diffraction_db=actual_diffraction_db,
+        terrain_grid=terrain_grid,
     )
     
     pdf_bytes = pdf_buffer.getvalue()
@@ -697,3 +758,176 @@ def terrain_profile(req: TerrainProfileRequest):
         "bts_total_height": round(H_tx, 1),
         "cpe_total_height": round(H_rx, 1)
     }
+
+@app.get("/api/history")
+def get_history(limit: int = 10):
+    """Retrieve the summary of recent simulation runs."""
+    try:
+        runs = db.list_runs(BASE_DIR, limit=limit)
+        return {"runs": runs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve history: {str(e)}")
+
+@app.get("/api/history/{run_id}")
+def get_history_detail(run_id: str):
+    """Retrieve full details of a specific simulation run."""
+    try:
+        run = db.get_run(BASE_DIR, run_id)
+        if not run:
+            raise HTTPException(status_code=404, detail="Simulation run not found.")
+        return run
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve simulation detail: {str(e)}")
+
+@app.delete("/api/history/{run_id}")
+def delete_history_run(run_id: str):
+    """Delete a specific simulation run from history."""
+    try:
+        success = db.delete_run(BASE_DIR, run_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Simulation run not found.")
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete simulation run: {str(e)}")
+
+@app.post("/api/history/{run_id}/pdf")
+def generate_history_pdf(run_id: str):
+    """Generate a PDF report for a saved historical simulation run."""
+    try:
+        run = db.get_run(BASE_DIR, run_id)
+        if not run:
+            raise HTTPException(status_code=404, detail="Simulation run not found.")
+        
+        # Extract params from run history record
+        params_dict = run.get("params_json") or {}
+        stats_dict = run.get("stats_json") or {}
+        result_dict = run.get("result_json") or {}
+        
+        # Check if we have standard sites in params
+        if "sites" not in params_dict:
+            raise HTTPException(status_code=400, detail="Cannot generate report: missing sites in saved parameters.")
+            
+        # Parse active BTS
+        bts_candidates = [s for s in params_dict["sites"] if s.get("is_bts_candidate")]
+        if not bts_candidates:
+            params_dict["sites"][0]["is_bts_candidate"] = True
+            bts_candidates = [params_dict["sites"][0]]
+            
+        site_idx = params_dict.get("site_index", 0)
+        if site_idx >= len(bts_candidates):
+            site_idx = 0
+            
+        active_bts_dict = bts_candidates[site_idx]
+        active_bts = KMLPoint(
+            name=active_bts_dict["name"],
+            latitude=active_bts_dict["latitude"],
+            longitude=active_bts_dict["longitude"],
+            description=active_bts_dict.get("description", ""),
+            is_bts_candidate=True,
+            height_m=params_dict.get("bts_height", 30.0),
+            site_type="BTS"
+        )
+        
+        # Build bounding box
+        polys = params_dict.get("polygons", [])
+        lines = params_dict.get("lines", [])
+        bounds = build_bounding_box(params_dict["sites"], polys, lines)
+        
+        # Fetch terrain
+        srtm_key = params_dict.get("srtm_key") or os.getenv("OPENTOPOGRAPHY_API_KEY", "")
+        terrain_grid = fetch_srtm(bounds, srtm_key)
+        
+        # Reconstruct equipments
+        eb = WifrostBTS()
+        eb.antenna_height_default_m = params_dict.get("bts_height", 30.0)
+        eb.tx_power_dbm = params_dict.get("eirp_dbm", 36.0) - eb.antenna_gain_dbi + eb.cable_loss_db
+        # Azimuth and sector beamwidths
+        eb.default_sectors = len(params_dict.get("sector_azimuths", [0]))
+        eb.sector_azimuths = list(params_dict.get("sector_azimuths", [0]))
+        eb.horizontal_beamwidth = params_dict.get("hpbw_deg", 65.0)
+        eb.front_to_back_ratio = params_dict.get("front_to_back_db", 25.0)
+        
+        ec = WifrostCPE()
+        ec.receiver_sensitivity_dbm = params_dict.get("cpe_sensitivity", -104.0)
+        ec.antenna_height_default_m = params_dict.get("cpe_height", 10.0)
+        env = params_dict.get("environment", "suburban")
+        
+        # Generate simulation grid
+        grid = compute_coverage_grid(
+            bts_site=active_bts,
+            equipment_bts=eb,
+            equipment_cpe=ec,
+            f_mhz=params_dict.get("frequency_mhz", 470.0),
+            bounds=bounds,
+            terrain_grid=terrain_grid,
+            resolution_m=100.0,
+            model=params_dict.get("model", "terrain_aware"),
+            environment=env,
+            bts_height_override=params_dict.get("bts_height", 30.0)
+        )
+        
+        # Calculate link metrics at cell edge
+        eirp = compute_eirp(eb.tx_power_dbm, eb.antenna_gain_dbi, eb.cable_loss_db)
+        edge_dist_km = max(0.5, grid.stats["max_range_km"])
+        
+        import math as _math
+        edge_bearing_rad = _math.radians(45.0)
+        edge_lat = active_bts.latitude + (edge_dist_km / 111.32) * _math.cos(edge_bearing_rad)
+        edge_lon = active_bts.longitude + (edge_dist_km / (111.32 * _math.cos(_math.radians(active_bts.latitude)))) * _math.sin(edge_bearing_rad)
+        
+        from propagation import terrain_aware_loss as _tal, shadowing_margin as _sm, ENVIRONMENT_SIGMA
+        edge_pl = _tal(
+            active_bts.latitude, active_bts.longitude, params_dict.get("bts_height", 30.0),
+            edge_lat, edge_lon, ec.antenna_height_default_m,
+            params_dict.get("frequency_mhz", 470.0), terrain_grid, env
+        )
+        
+        edge_loss_db = edge_pl.total_db
+        actual_diffraction_db = edge_pl.diffraction_db
+        actual_clutter_db = edge_pl.clutter_db
+        
+        sigma = ENVIRONMENT_SIGMA.get(env, 4.0)
+        actual_shadowing_90 = _sm(0.90, sigma)
+        
+        edge_rssi_dbm = compute_rssi(edge_loss_db, eirp, ec.antenna_gain_dbi, ec.cable_loss_db)
+        edge_margin_db = edge_rssi_dbm - ec.receiver_sensitivity_dbm
+        
+        pdf_buffer = BytesIO()
+        generate_pdf_report(
+            output_stream=pdf_buffer,
+            project_name=run.get("project") or "WiFrost Project",
+            prepared_by="Marcelo (WiFrost Sales Eng)",
+            coverage_grid=grid,
+            equipment_bts=eb,
+            equipment_cpe=ec,
+            model_name="Terrain-Aware Hata" if params_dict.get("model") == "terrain_aware" else "Flat Hata",
+            environment=env,
+            conclusion_text=result_dict.get("plain_english_result", ""),
+            stats=stats_dict,
+            three_scenarios=result_dict.get("three_scenarios"),
+            cpe_results=None,
+            frequency_mhz=params_dict.get("frequency_mhz", 470.0),
+            edge_loss_db=edge_loss_db,
+            edge_rssi_dbm=edge_rssi_dbm,
+            edge_margin_db=edge_margin_db,
+            system_margin_db=params_dict.get("system_margin_db", 0.0),
+            shadowing_margin_90_db=actual_shadowing_90,
+            clutter_db=actual_clutter_db,
+            diffraction_db=actual_diffraction_db,
+            terrain_grid=terrain_grid,
+        )
+        
+        pdf_bytes = pdf_buffer.getvalue()
+        pdf_base64 = base64.b64encode(pdf_bytes).decode("utf-8")
+        
+        return {
+            "pdf_base64": pdf_base64
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate historical PDF report: {str(e)}")

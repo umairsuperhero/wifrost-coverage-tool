@@ -3,6 +3,8 @@ import json
 import time
 import google.generativeai as genai
 from typing import Dict, Any, List, Optional
+import threading
+_genai_lock = threading.Lock()
 
 
 def _gemini_call_with_retry(model, content, max_retries=3):
@@ -50,7 +52,8 @@ def extract_equipment_params(pdf_bytes: bytes,
     if not api_key:
         raise ValueError("Gemini API Key is missing.")
 
-    genai.configure(api_key=api_key)
+    with _genai_lock:
+        genai.configure(api_key=api_key)
     try:
         model = genai.GenerativeModel('gemini-3.1-pro')
     except Exception as e:
@@ -100,7 +103,8 @@ def interpret_question(question_text: str,
     if not api_key or api_key.strip() == "":
         return heuristic_interpret_question(question_text, sites_context)
 
-    genai.configure(api_key=api_key)
+    with _genai_lock:
+        genai.configure(api_key=api_key)
     system_prompt = """You are an RF planning assistant for WiFrost TVWS.
 The user is Marcelo, a sales engineer. Analyse his question and return JSON only:
 {
@@ -256,7 +260,8 @@ def generate_recommendation(result_dict: Dict[str, Any],
     if not api_key or api_key.strip() == "":
         return None
 
-    genai.configure(api_key=api_key)
+    with _genai_lock:
+        genai.configure(api_key=api_key)
     try:
         model = genai.GenerativeModel('gemini-3.5-flash')
     except Exception:

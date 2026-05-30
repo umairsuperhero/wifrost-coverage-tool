@@ -12,6 +12,7 @@ interface ResultsBannerProps {
   stats: any;
   threeScenarios?: any;
   cpeResults?: any[];
+  showToast?: (message: string, type?: "success" | "error" | "warning") => void;
 }
 
 export default function ResultsBanner({
@@ -22,6 +23,7 @@ export default function ResultsBanner({
   stats,
   threeScenarios,
   cpeResults,
+  showToast,
 }: ResultsBannerProps) {
   const [downloading, setDownloading] = useState(false);
 
@@ -50,9 +52,14 @@ export default function ResultsBanner({
       link.href = window.URL.createObjectURL(blob);
       link.download = `${projectName.replace(/\s+/g, "_") || "wifrost"}_coverage_report.pdf`;
       link.click();
+      if (showToast) showToast("PDF report downloaded successfully!", "success");
     } catch (e) {
       console.error("Failed to download PDF report:", e);
-      alert("Error generating PDF report. Please check backend connection.");
+      if (showToast) {
+        showToast("Error generating PDF report. Please check backend connection.", "error");
+      } else {
+        alert("Error generating PDF report. Please check backend connection.");
+      }
     } finally {
       setDownloading(false);
     }

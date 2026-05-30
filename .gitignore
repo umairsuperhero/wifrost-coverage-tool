@@ -14,5 +14,10 @@ env/
 # Terrain / simulation cache
 cache/
 
+# Runtime / generated
+data/
+simulations/
+scratch/
+
 # OS
 .DS_Store

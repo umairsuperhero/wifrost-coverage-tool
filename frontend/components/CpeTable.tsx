@@ -6,7 +6,7 @@ import { Table, Download, Search, Check, AlertTriangle, X } from "lucide-react";
 const SECTOR_COLORS = ["#3B82F6", "#22C55E", "#F59E0B"];
 const SECTOR_LABELS = ["S1", "S2", "S3"];
 
-interface CpeResult {
+export interface CpeResult {
   name: string;
   distance_km: number;
   elevation_m: number;

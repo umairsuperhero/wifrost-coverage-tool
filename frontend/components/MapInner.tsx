@@ -89,6 +89,8 @@ interface MapInnerProps {
   selectedCpeName: string | null;
   onSelectCpe: (cpe: any) => void;
   sectorInfo?: SectorInfo | null;
+  activeScenario?: "best" | "realistic" | "conservative";
+  activeThreshold?: number;
 }
 
 function sectorPolygon(
@@ -126,6 +128,8 @@ export default function MapInner({
   selectedCpeName,
   onSelectCpe,
   sectorInfo,
+  activeScenario = "realistic",
+  activeThreshold = -89.0,
 }: MapInnerProps) {
   // Default center Buonaventura Colombia (SPRBUN)
   const defaultCenter: [number, number] = [3.89, -77.08];
@@ -187,9 +191,15 @@ export default function MapInner({
         {/* Heatmap GeoJSON Layer */}
         {coverageGeojson && (
           <GeoJSON
-            key={JSON.stringify(coverageGeojson.features?.[0]?.properties || {})}
+            key={`${activeScenario}-${activeThreshold}-${JSON.stringify(coverageGeojson.features?.[0]?.properties || {})}`}
             data={coverageGeojson}
             style={geojsonStyle}
+            filter={(feature) => {
+              if (feature && feature.properties && typeof feature.properties.rssi === "number") {
+                return feature.properties.rssi >= activeThreshold;
+              }
+              return true;
+            }}
           />
         )}
 

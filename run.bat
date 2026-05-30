@@ -8,6 +8,22 @@ if not exist venv (
 ) else (
     call venv\Scripts\activate
 )
-echo Opening WiFrost Coverage Tool...
-streamlit run app.py
+
+if not exist frontend\node_modules (
+    echo Installing frontend dependencies...
+    cd frontend
+    call npm install
+    cd ..
+)
+
+echo Starting WiFrost RF Backend on http://127.0.0.1:8000...
+start "WiFrost Backend" cmd /c "call venv\Scripts\activate && uvicorn api:app --host 127.0.0.1 --port 8000"
+
+echo Starting WiFrost RF Frontend on http://127.0.0.1:3000...
+cd frontend
+start "WiFrost Frontend" cmd /c "npm run dev"
+cd ..
+
+echo WiFrost TVWS Coverage tool is running.
+echo Close the newly opened terminal windows to stop the servers.
 pause
