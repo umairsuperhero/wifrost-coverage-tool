@@ -211,7 +211,7 @@ export default function MapInner({
             const color = SECTOR_COLORS[i % SECTOR_COLORS.length];
             return (
               <Polygon
-                key={`sector-${i}`}
+                key={`sector-${i}-${az}-${sectorInfo.hpbw}-${sectorInfo.radiusKm}`}
                 positions={pts}
                 pathOptions={{
                   fillColor: color,
