@@ -5,24 +5,27 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: uvicorn api:app --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      - PORT=8000
     volumes:
-      - ./data:/app/data
-      - ./cache:/app/cache
+      - ./data:/app/data      # SQLite history database
+      - ./cache:/app/cache    # SRTM elevation tile cache
     restart: always
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # Browser-visible URL — must be reachable from the user's machine,
+        # not the internal Docker network name.
+        NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
-      - "3001:3001"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - "3000:3000"
     depends_on:
       - backend
     restart: always
