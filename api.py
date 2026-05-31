@@ -32,25 +32,20 @@ app = FastAPI(title="WiFrost TVWS RF Coverage API")
 
 # Configure CORS
 # CORS_ORIGINS env var overrides defaults (comma-separated URLs).
-# Falls back to allowing all localhost ports for local development.
+# Defaults to ["*"] so any hosted frontend (Vercel, Firebase, etc.) works
+# without extra configuration. Set CORS_ORIGINS explicitly to restrict in prod.
 _cors_env = os.getenv("CORS_ORIGINS", "")
 if _cors_env:
     origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
+    allow_origin_regex = None
 else:
-    # Allow any localhost port in dev; Firebase domain added if set
-    origins = ["http://localhost:3000", "http://localhost:3001",
-               "http://localhost:3002", "http://localhost:8000",
-               "http://127.0.0.1:3000", "http://127.0.0.1:3001",
-               "http://127.0.0.1:3002", "http://127.0.0.1:8000"]
-
-firebase_domain = os.getenv("FIREBASE_HOSTING_DOMAIN")
-if firebase_domain:
-    origins.append(firebase_domain)
+    origins = ["*"]
+    allow_origin_regex = None
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
