@@ -217,6 +217,10 @@ export default function Home() {
         bts_height: params.bts_height,
         cpe_height: params.cpe_height,
         cpe_sensitivity: params.cpe_sensitivity,
+        sector_azimuths: params.sector_azimuths,
+        hpbw_deg: params.hpbw_deg,
+        vpbw_deg: params.vpbw_deg,
+        front_to_back_db: params.front_to_back_db,
       });
 
       // Save active simulation parameters for report generation
@@ -235,6 +239,10 @@ export default function Home() {
         bts_height: params.bts_height,
         cpe_height: params.cpe_height,
         cpe_sensitivity: params.cpe_sensitivity,
+        sector_azimuths: params.sector_azimuths,
+        hpbw_deg: params.hpbw_deg,
+        vpbw_deg: params.vpbw_deg,
+        front_to_back_db: params.front_to_back_db,
       };
       
       setActiveSimulationParams(simulationParamsContext);
