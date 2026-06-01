@@ -112,7 +112,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
   const [environment, setEnvironment] = useState<string>("suburban");
 
   const [rfPreset, setRfPreset] = useState<string>("manual");
-  const [isAdvanced, setIsAdvanced] = useState<boolean>(false);
+  const [advancedMode, setAdvancedMode] = useState(() => localStorage.getItem('wifrost_advanced_mode') === 'true');
 
   interface PresetConfig {
     name: string;
@@ -409,37 +409,10 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
 
       {/* Simulation Parameters Section */}
       <div className="p-5 flex-1 space-y-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-            <Sliders className="w-4 h-4 text-blue-500" />
-            2. Simulation Parameters
-          </h2>
-          {/* Mode Switcher */}
-          <div className="flex bg-slate-950/60 p-0.5 rounded-lg border border-slate-850">
-            <button
-              type="button"
-              onClick={() => setIsAdvanced(false)}
-              className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition duration-205 cursor-pointer ${
-                !isAdvanced
-                  ? "bg-blue-600 text-white shadow-md font-bold"
-                  : "text-slate-500 hover:text-slate-350"
-              }`}
-            >
-              Operator
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsAdvanced(true)}
-              className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition duration-205 cursor-pointer ${
-                isAdvanced
-                  ? "bg-blue-600 text-white shadow-md font-bold"
-                  : "text-slate-500 hover:text-slate-350"
-              }`}
-            >
-              Engineer
-            </button>
-          </div>
-        </div>
+        <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+          <Sliders className="w-4 h-4 text-blue-500" />
+          2. Simulation Parameters
+        </h2>
 
         <div className="space-y-4">
           {/* RF Parameter Preset */}
@@ -484,64 +457,82 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
             </select>
           </div>
 
-          {/* Model Type */}
-          <div className={isAdvanced ? "space-y-1.5" : "hidden"}>
-            <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
-              Propagation Model
-              <Tooltip content="Terrain-Aware: Okumura-Hata propagation calculated over real elevation data from SRTM. Flat Hata: Standard Hata formula assuming a flat plain." />
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setModelType("terrain_aware")}
-                className={`py-2 text-xs font-medium rounded-lg border transition ${
-                  modelType === "terrain_aware"
-                    ? "bg-blue-600/10 border-blue-500 text-blue-400 font-semibold"
-                    : "bg-slate-950/40 border-slate-850 text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                Terrain-Aware
-              </button>
-              <button
-                type="button"
-                onClick={() => setModelType("flat")}
-                className={`py-2 text-xs font-medium rounded-lg border transition ${
-                  modelType === "flat"
-                    ? "bg-blue-600/10 border-blue-500 text-blue-400 font-semibold"
-                    : "bg-slate-950/40 border-slate-850 text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                Flat Hata
-              </button>
-            </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                const next = !advancedMode;
+                setAdvancedMode(next);
+                localStorage.setItem('wifrost_advanced_mode', String(next));
+              }}
+              className="text-xs text-blue-400 hover:text-blue-300 font-medium"
+            >
+              {advancedMode ? "Advanced ▴" : "Advanced ▾"}
+            </button>
           </div>
+
+          {/* Model Type */}
+          {advancedMode && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+                Propagation Model
+                <Tooltip content="Terrain-Aware: Okumura-Hata propagation calculated over real elevation data from SRTM. Flat Hata: Standard Hata formula assuming a flat plain." />
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setModelType("terrain_aware")}
+                  className={`py-2 text-xs font-medium rounded-lg border transition ${
+                    modelType === "terrain_aware"
+                      ? "bg-blue-600/10 border-blue-500 text-blue-400 font-semibold"
+                      : "bg-slate-950/40 border-slate-850 text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  Terrain-Aware
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModelType("flat")}
+                  className={`py-2 text-xs font-medium rounded-lg border transition ${
+                    modelType === "flat"
+                      ? "bg-blue-600/10 border-blue-500 text-blue-400 font-semibold"
+                      : "bg-slate-950/40 border-slate-850 text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  Flat Hata
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Clutter Environment */}
-          <div className={isAdvanced ? "space-y-1.5" : "hidden"}>
-            <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
-              Clutter Environment
-              <Tooltip content="Clutter introduces clutter loss: Open (3 dB), Open Water (0 dB), Suburban (8 dB), Light Vegetation (6 dB), Dense Vegetation (15 dB), Port/Industrial (12 dB), Urban (18 dB)." />
-            </label>
-            <select
-              value={environment}
-              onChange={(e) => {
-                setEnvironment(e.target.value);
-                setRfPreset("manual");
-              }}
-              className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
-            >
-              <option value="open">Open / Rural Flat</option>
-              <option value="open_water">Open Water / Sea</option>
-              <option value="suburban">Suburban / Trees & Houses</option>
-              <option value="vegetation_light">Light Vegetation / Forest Edge</option>
-              <option value="vegetation_dense">Dense Vegetation / Deep Jungle</option>
-              <option value="port_industrial">Port / Industrial</option>
-              <option value="urban">Urban / Tall Structures</option>
-            </select>
-          </div>
+          {advancedMode && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+                Clutter Environment
+                <Tooltip content="Clutter introduces clutter loss: Open (3 dB), Open Water (0 dB), Suburban (8 dB), Light Vegetation (6 dB), Dense Vegetation (15 dB), Port/Industrial (12 dB), Urban (18 dB)." />
+              </label>
+              <select
+                value={environment}
+                onChange={(e) => {
+                  setEnvironment(e.target.value);
+                  setRfPreset("manual");
+                }}
+                className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
+              >
+                <option value="open">Open / Rural Flat</option>
+                <option value="open_water">Open Water / Sea</option>
+                <option value="suburban">Suburban / Trees & Houses</option>
+                <option value="vegetation_light">Light Vegetation / Forest Edge</option>
+                <option value="vegetation_dense">Dense Vegetation / Deep Jungle</option>
+                <option value="port_industrial">Port / Industrial</option>
+                <option value="urban">Urban / Tall Structures</option>
+              </select>
+            </div>
+          )}
 
           {/* Frequency & Heights */}
-          <div className={isAdvanced ? "grid grid-cols-2 gap-4" : "hidden"}>
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
                 Frequency (MHz)
@@ -577,7 +568,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           </div>
 
           {/* Transmitter Power specs */}
-          <div className={isAdvanced ? "block" : "hidden"}>
+          {advancedMode && (
             <details className="group border border-slate-850 rounded-lg bg-slate-950/20 overflow-hidden">
               <summary className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase cursor-pointer flex justify-between items-center hover:bg-slate-950/40 transition">
                 <span>BTS Equipment Config</span>
@@ -627,7 +618,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                 </div>
               </div>
             </details>
-          </div>
+          )}
 
           {/* ── ANTENNA SECTORS ─────────────────────────────── */}
           <div className="border border-slate-700 rounded-lg bg-slate-950/20 overflow-hidden">
@@ -736,7 +727,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           </div>
 
           {/* CPE specs */}
-          <div className={isAdvanced ? "block" : "hidden"}>
+          {advancedMode && (
             <details className="group border border-slate-850 rounded-lg bg-slate-950/20 overflow-hidden">
               <summary className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase cursor-pointer flex justify-between items-center hover:bg-slate-950/40 transition">
                 <span>CPE client Config</span>
@@ -823,26 +814,35 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                 </div>
               </div>
             </details>
+          )}
+
+          {/* System Margin — always visible */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+              System Margin (dB)
+              <Tooltip content="Fading and reliability safety margin in dB. Higher values require stronger signal thresholds to declare coverage (Conservative vs Realistic)." />
+            </label>
+            <input
+              type="number"
+              value={systemMarginDb}
+              onChange={(e) => {
+                setSystemMarginDb(Number(e.target.value));
+                setRfPreset("manual");
+              }}
+              min={0}
+              className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
+            />
           </div>
 
-          {/* System Margin */}
-          <div className={isAdvanced ? "grid grid-cols-2 gap-4" : "hidden"}>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
-                System Margin (dB)
-                <Tooltip content="Fading and reliability safety margin in dB. Higher values require stronger signal thresholds to declare coverage (Conservative vs Realistic)." />
-              </label>
-              <input
-                type="number"
-                value={systemMarginDb}
-                onChange={(e) => {
-                  setSystemMarginDb(Number(e.target.value));
-                  setRfPreset("manual");
-                }}
-                min={0}
-                className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
-              />
-            </div>
+          {/* Simple-mode summary */}
+          {!advancedMode && (
+            <p className="text-xs text-slate-500 truncate">
+              Model: {modelType} · {environment} · Gain {antennaGainDbi} dBi · Margin {systemMarginDb} dB
+            </p>
+          )}
+
+          {/* Coverage Probability — advanced only */}
+          {advancedMode && (
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
                 Coverage Prob.
@@ -860,22 +860,24 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                 <option value="99%">99% (Pessimistic)</option>
               </select>
             </div>
-          </div>
+          )}
 
           {/* OpenTopography Key */}
-          <div className={isAdvanced ? "space-y-1.5" : "hidden"}>
-            <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
-              OpenTopography Key
-              <Tooltip content="Your personal OpenTopography key to query terrain elevations. Leave empty to use the server's shared key." />
-            </label>
-            <input
-              type="password"
-              placeholder="Uses server defaults if blank"
-              value={srtmKey}
-              onChange={(e) => setSrtmKey(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
-            />
-          </div>
+          {advancedMode && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+                OpenTopography Key
+                <Tooltip content="Your personal OpenTopography key to query terrain elevations. Leave empty to use the server's shared key." />
+              </label>
+              <input
+                type="password"
+                placeholder="Uses server defaults if blank"
+                value={srtmKey}
+                onChange={(e) => setSrtmKey(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+          )}
         </div>
       </div>
 
