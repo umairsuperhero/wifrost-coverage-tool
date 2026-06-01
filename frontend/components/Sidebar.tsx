@@ -112,7 +112,10 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
   const [environment, setEnvironment] = useState<string>("suburban");
 
   const [rfPreset, setRfPreset] = useState<string>("manual");
-  const [advancedMode, setAdvancedMode] = useState(() => localStorage.getItem('wifrost_advanced_mode') === 'true');
+  const [advancedMode, setAdvancedMode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('wifrost_advanced_mode') === 'true';
+  });
 
   interface PresetConfig {
     name: string;
