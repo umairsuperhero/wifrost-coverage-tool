@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { MapContainer, TileLayer, Marker, Popup, GeoJSON, Polygon, Polyline, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, GeoJSON, Polygon, Polyline, CircleMarker, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { MousePointer, RadioTower, Ruler } from "lucide-react";
 
@@ -21,6 +21,12 @@ const getBtsIcon = (isActive: boolean) => {
     iconAnchor: [20, 20],
     popupAnchor: [0, -10],
   });
+};
+
+const getCpeColor = (margin_db: number): string => {
+  if (margin_db >= 10) return "#22C55E"; // emerald-500 — good
+  if (margin_db >= 0)  return "#F59E0B"; // amber-500  — marginal
+  return "#EF4444";                       // red-500    — fail
 };
 
 const getCpeIcon = (status: string, isSelected: boolean) => {
@@ -355,13 +361,17 @@ export default function MapInner({
         {/* CPE client Markers */}
         {cpeResults.map((cpe, index) => {
           const isSelected = cpe.name === selectedCpeName;
-          const latLng: [number, number] = [cpe.latitude, cpe.longitude];
+          const color = getCpeColor(cpe.margin_db);
 
           return (
-            <Marker
+            <CircleMarker
               key={`cpe-${index}`}
-              position={latLng}
-              icon={getCpeIcon(cpe.status, isSelected)}
+              center={[cpe.latitude, cpe.longitude]}
+              radius={isSelected ? 9 : 6}
+              weight={isSelected ? 2 : 1}
+              color={color}
+              fillColor={color}
+              fillOpacity={0.9}
               eventHandlers={{
                 click: () => onSelectCpe(cpe),
               }}
@@ -393,7 +403,7 @@ export default function MapInner({
                   <span className="text-[9px] text-slate-500 block mt-1">Click in table to show terrain profile</span>
                 </div>
               </Popup>
-            </Marker>
+            </CircleMarker>
           );
         })}
 
