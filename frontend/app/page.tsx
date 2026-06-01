@@ -12,6 +12,7 @@ import CpeTable, { CpeResult } from "../components/CpeTable";
 import TerrainChart from "../components/TerrainChart";
 import ModelInfoPanel from "../components/ModelInfoPanel";
 import LinkBudget from "../components/LinkBudget";
+import CpeSummaryBar from "../components/CpeSummaryBar";
 import { Compass, HelpCircle, AlertCircle, Signal, CheckCircle, AlertTriangle } from "lucide-react";
 import axios from "axios";
 
@@ -616,6 +617,61 @@ export default function Home() {
                     onScenarioChange={setActiveScenario}
                   />
 
+                  {/* CPE Summary Bar — only when CPE results exist */}
+                  {cpeResults.length > 0 && (
+                    <CpeSummaryBar cpeResults={cpeResults} />
+                  )}
+
+                  {/* CPE Table — only when CPE results exist */}
+                  {cpeResults.length > 0 && (
+                    <CpeTable
+                      cpeResults={cpeResults}
+                      selectedCpeName={selectedCpe?.name || null}
+                      onSelectCpe={(cpe) => handleSelectCpe(cpe)}
+                      sectorCount={activeSimulationParams?.sector_azimuths?.length ?? 1}
+                    />
+                  )}
+
+                  {/* Elevation profile chart */}
+                  {isProfileLoading ? (
+                    <div className="bg-slate-900/60 rounded-xl border border-slate-800 p-5 flex flex-col items-center justify-center h-[340px] text-slate-400">
+                      <span className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mb-2" />
+                      <p className="text-sm">Generating terrain profile...</p>
+                    </div>
+                  ) : (
+                    (() => {
+                      const btsCandidates = parsedData.sites.filter((s) => s.is_bts_candidate);
+                      const activeBtsForProfile = selectedBtsIndex === -1 && selectedCpe?.serving_bts_index !== undefined
+                        ? btsCandidates[selectedCpe.serving_bts_index]
+                        : btsCandidates[selectedBtsIndex];
+
+                      const btsLatForProfile = selectedCpe?.name === "Measured Path" && measurePoints.length > 0
+                        ? measurePoints[0][0]
+                        : activeBtsForProfile?.latitude;
+                      const btsLonForProfile = selectedCpe?.name === "Measured Path" && measurePoints.length > 0
+                        ? measurePoints[0][1]
+                        : activeBtsForProfile?.longitude;
+
+                      return (
+                        <TerrainChart
+                          profileData={terrainProfile?.profile || []}
+                          label={terrainProfile?.label || ""}
+                          isFlat={terrainProfile?.is_flat || false}
+                          cpeName={selectedCpe?.name || "CPE"}
+                          btsElevation={terrainProfile?.bts_elevation}
+                          cpeElevation={terrainProfile?.cpe_elevation}
+                          btsTotalHeight={terrainProfile?.bts_total_height}
+                          cpeTotalHeight={terrainProfile?.cpe_total_height}
+                          btsLat={btsLatForProfile}
+                          btsLon={btsLonForProfile}
+                          cpeLat={selectedCpe?.latitude}
+                          cpeLon={selectedCpe?.longitude}
+                          onHoverPoint={setHoverPoint}
+                        />
+                      );
+                    })()
+                  )}
+
                   {/* Link Budget Panel */}
                   <LinkBudget
                     txPowerDbm={activeSimulationParams?.tx_power_dbm ?? 23.0}
@@ -628,90 +684,6 @@ export default function Home() {
                     frequencyMhz={activeSimulationParams?.frequency_mhz ?? 600.0}
                     maxRangeKm={simulationResults.stats.max_range_km ?? null}
                   />
-
-                  {/* Details Tabs */}
-                  <div className="space-y-4">
-                    <div className="flex border-b border-slate-800 pb-px gap-6">
-                      <button
-                        onClick={() => setActiveTab("analysis")}
-                        className={`pb-2.5 text-sm font-semibold border-b-2 transition ${
-                          activeTab === "analysis"
-                            ? "border-blue-500 text-blue-400 font-bold"
-                            : "border-transparent text-slate-400 hover:text-slate-200"
-                        }`}
-                      >
-                        Client Analysis &amp; Elevation Profile
-                      </button>
-                      <button
-                        onClick={() => setActiveTab("model")}
-                        className={`pb-2.5 text-sm font-semibold border-b-2 transition ${
-                          activeTab === "model"
-                            ? "border-blue-500 text-blue-400 font-bold"
-                            : "border-transparent text-slate-400 hover:text-slate-200"
-                        }`}
-                      >
-                        Propagation Theory &amp; Formulas
-                      </button>
-                    </div>
-
-                    {activeTab === "analysis" ? (
-                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-                        {/* CPE Table */}
-                        <CpeTable
-                          cpeResults={cpeResults}
-                          selectedCpeName={selectedCpe?.name || null}
-                          onSelectCpe={(cpe) => handleSelectCpe(cpe)}
-                          sectorCount={activeSimulationParams?.sector_azimuths?.length ?? 1}
-                        />
-
-                        {/* Elevation profile chart */}
-                        {isProfileLoading ? (
-                          <div className="bg-slate-900/60 rounded-xl border border-slate-800 p-5 flex flex-col items-center justify-center h-[340px] text-slate-400">
-                            <span className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mb-2" />
-                            <p className="text-sm">Generating terrain profile...</p>
-                          </div>
-                        ) : (
-                          (() => {
-                            const btsCandidates = parsedData.sites.filter((s) => s.is_bts_candidate);
-                            const activeBtsForProfile = selectedBtsIndex === -1 && selectedCpe?.serving_bts_index !== undefined
-                              ? btsCandidates[selectedCpe.serving_bts_index]
-                              : btsCandidates[selectedBtsIndex];
-                            
-                            const btsLatForProfile = selectedCpe?.name === "Measured Path" && measurePoints.length > 0
-                              ? measurePoints[0][0]
-                              : activeBtsForProfile?.latitude;
-                            const btsLonForProfile = selectedCpe?.name === "Measured Path" && measurePoints.length > 0
-                              ? measurePoints[0][1]
-                              : activeBtsForProfile?.longitude;
-
-                            return (
-                              <TerrainChart
-                                profileData={terrainProfile?.profile || []}
-                                label={terrainProfile?.label || ""}
-                                isFlat={terrainProfile?.is_flat || false}
-                                cpeName={selectedCpe?.name || "CPE"}
-                                btsElevation={terrainProfile?.bts_elevation}
-                                cpeElevation={terrainProfile?.cpe_elevation}
-                                btsTotalHeight={terrainProfile?.bts_total_height}
-                                cpeTotalHeight={terrainProfile?.cpe_total_height}
-                                btsLat={btsLatForProfile}
-                                btsLon={btsLonForProfile}
-                                cpeLat={selectedCpe?.latitude}
-                                cpeLon={selectedCpe?.longitude}
-                                onHoverPoint={setHoverPoint}
-                              />
-                            );
-                          })()
-                        )}
-                      </div>
-                    ) : (
-                      /* Model Panel */
-                      <ModelInfoPanel
-                        modelType={activeSimulationParams?.model || "terrain_aware"}
-                        frequencyMhz={activeSimulationParams?.frequency_mhz || 600.0}
-                      />
-                    )}
-                  </div>
                 </>
               ) : (
                 /* Post-load, Pre-simulation Help Message */
