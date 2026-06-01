@@ -11,6 +11,7 @@ import MetricsRow from "../components/MetricsRow";
 import CpeTable, { CpeResult } from "../components/CpeTable";
 import TerrainChart from "../components/TerrainChart";
 import ModelInfoPanel from "../components/ModelInfoPanel";
+import LinkBudget from "../components/LinkBudget";
 import { Compass, HelpCircle, AlertCircle, Signal, CheckCircle, AlertTriangle } from "lucide-react";
 import axios from "axios";
 
@@ -613,6 +614,19 @@ export default function Home() {
                     threeScenarios={simulationResults.three_scenarios}
                     activeScenarioName={activeScenario}
                     onScenarioChange={setActiveScenario}
+                  />
+
+                  {/* Link Budget Panel */}
+                  <LinkBudget
+                    txPowerDbm={activeSimulationParams?.tx_power_dbm ?? 23.0}
+                    antennaGainDbi={activeSimulationParams?.antenna_gain_dbi ?? 13.0}
+                    cableLossDb={activeSimulationParams?.cable_loss_db ?? 1.5}
+                    cpeGainDbi={activeSimulationParams?.rx_gain_dbi ?? 10.0}
+                    cpeCableLossDb={activeSimulationParams?.rx_cable_loss_db ?? 0.5}
+                    cpeSensitivityDbm={activeSimulationParams?.cpe_sensitivity ?? -92.0}
+                    systemMarginDb={activeSimulationParams?.system_margin_db ?? 10.0}
+                    frequencyMhz={activeSimulationParams?.frequency_mhz ?? 600.0}
+                    maxRangeKm={simulationResults.stats.max_range_km ?? null}
                   />
 
                   {/* Details Tabs */}
