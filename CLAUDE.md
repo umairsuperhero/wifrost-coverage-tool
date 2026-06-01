@@ -26,14 +26,16 @@ The original Streamlit app lives on `main` (v1.2.0). This branch (`v2.0-react-fr
 | Component | Role |
 |---|---|
 | `app/page.tsx` | Root page — state orchestration, API calls, layout |
-| `components/Sidebar.tsx` | File upload, simulation params, antenna sectors panel, channel BW, history tab |
+| `components/Sidebar.tsx` | File upload, simulation params, Simple/Advanced toggle (localStorage), antenna sectors panel, channel BW, history tab |
 | `components/HistoryPanel.tsx` | Simulation history list with refresh/delete/reload |
 | `components/CompassRose.tsx` | SVG compass rose with draggable sector wedges |
-| `components/MapView.tsx` + `MapInner.tsx` | Leaflet map, coverage GeoJSON, client-side scenario filter, sector wedge polygons |
+| `components/MapView.tsx` + `MapInner.tsx` | Leaflet map, coverage GeoJSON, client-side scenario filter, sector wedge polygons; CPE CircleMarkers coloured by margin_db |
 | `components/CpeTable.tsx` | CPE link analysis table with Sector column |
+| `components/CpeSummaryBar.tsx` | Three-segment Excellent/Marginal/No-Signal progress bar above CpeTable |
 | `components/TerrainChart.tsx` | Terrain elevation cross-section |
 | `components/ResultsBanner.tsx` | Simulation outcome + PDF download trigger |
 | `components/MetricsRow.tsx` | Clickable Best / Realistic / Conservative scenario cards |
+| `components/LinkBudget.tsx` | Live RF link-budget breakdown: TX→EIRP, Rx→max allowed PL, simulated max range |
 | `components/ModelInfoPanel.tsx` | Propagation theory reference panel |
 
 ## Running locally

@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.1.0] — 2026-06-01
+
+### Added
+- **Simple / Advanced mode toggle** (`Sidebar.tsx`) — "Advanced ▾/▴" button below the BTS site selector; persisted in `localStorage` key `wifrost_advanced_mode` (default: Simple). Simple mode hides BTS Equipment Config, CPE Client Config, and Model/Environment groups; shows a one-line read-only summary (`Model · Environment · Gain · Margin`).
+- **Link Budget Panel** (`LinkBudget.tsx`) — live RF link-budget card below MetricsRow showing TX power, BTS antenna gain, cable loss → EIRP; Rx sensitivity, Rx antenna gain, Rx cable loss, system margin → max allowed path loss; and simulated max range (shows "—" before first run).
+- **Colored CPE map markers** (`MapInner.tsx`) — CPE markers converted from status-string `divIcon` to `CircleMarker` coloured by `margin_db` threshold: ≥10 dB emerald, ≥0 dB amber, <0 dB red. Selected CPE renders at radius 9 / weight 2; unselected at radius 6 / weight 1.
+- **CPE Summary Bar** (`CpeSummaryBar.tsx`) — three-segment progress bar (emerald / amber / red) with Excellent / Marginal / No Signal counts and percentage; displayed above CpeTable when CPE results exist.
+- **Cold-start loading UX** (`page.tsx`) — after 8 s of waiting the main panel shows an amber "⏳ Waking up the backend…" message explaining the Render free-tier sleep; clears immediately when the response arrives.
+
+### Changed
+- Right-hand results column reordered to: MetricsRow → CpeSummaryBar → CpeTable → TerrainChart → LinkBudget (flat vertical list; tabs wrapper removed).
+- Frequency / BTS Height and System Margin are now always visible regardless of Simple/Advanced mode.
+- `render.yaml` and `wifrost_logo.png` added to repository.
+
 ## [2.0.0] — 2026-06-01
 
 ### Added
