@@ -76,6 +76,20 @@ class NumberedCanvas(canvas.Canvas):
         self.restoreState()
 
 
+def _get_logo_path():
+    import os
+    logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wifrost_logo.png")
+    if not os.path.exists(logo_path):
+        try:
+            import urllib.request
+            url = "https://wifrost-common.sfo3.cdn.digitaloceanspaces.com/website%2Flogo-text.png"
+            urllib.request.urlretrieve(url, logo_path)
+        except Exception as e:
+            # Silently fallback if anything goes wrong
+            pass
+    return logo_path if os.path.exists(logo_path) else None
+
+
 def _draw_chrome(canvas, doc):
     canvas.saveState()
 
@@ -84,7 +98,18 @@ def _draw_chrome(canvas, doc):
     canvas.rect(0, letter[1] - 34, W, 34, fill=1, stroke=0)
     canvas.setFont('Helvetica-Bold', 9)
     canvas.setFillColor(colors.white)
-    canvas.drawString(36, letter[1] - 21, "WiFrost  ·  TVWS RF Coverage Analysis")
+    
+    # Try drawing logo, fallback to text if logo unavailable
+    logo_path = _get_logo_path()
+    if logo_path:
+        logo_w = 41.0
+        logo_h = 16.0
+        # Centered vertically in 34pt header bar
+        canvas.drawImage(logo_path, 36, letter[1] - 25, width=logo_w, height=logo_h, mask='auto')
+        canvas.drawString(36 + logo_w + 6, letter[1] - 21, " ·  TVWS RF Coverage Analysis")
+    else:
+        canvas.drawString(36, letter[1] - 21, "WiFrost  ·  TVWS RF Coverage Analysis")
+
     canvas.setFont('Helvetica', 9)
     canvas.drawRightString(W - 36, letter[1] - 21,
                            datetime.date.today().strftime('%B %d, %Y'))

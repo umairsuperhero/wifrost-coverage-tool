@@ -65,6 +65,8 @@ Open **http://localhost:3001**. Backend must be on 8000 (CORS allows 3000/3001/3
 - **Flat-terrain fallback** — if OpenTopography key is absent, `terrain.py` returns `is_flat=True`; diffraction is skipped and the UI shows a notice.
 - **Channel bandwidth → Rx sensitivity** auto-computed in Sidebar: `kTB + 8 dB NF + 3 dB SNR` (6 MHz = −95 dBm, 12 MHz = −92 dBm default, 18 = −90, 24 = −89).
 - **GeoJSON uses `thresh_best`** — all cells above best-case threshold are included; frontend filters client-side by `activeThreshold` for instant scenario switching.
+- **Terrain grid caching via snapping** — bounding box coordinates are rounded to the nearest `0.05` degrees inside `build_bounding_box`, keeping bounds identical for minor drags and achieving 100% cache hits.
+- **Horizontal interval GeoJSON merging** — Groups contiguous same-colored pixels row-by-row into single polygons inside `heatmap.py` to compress payload sizes by ~70% (<200KB).
 - **SQLite history** (`db.py`) — each simulation auto-saved; MAX_HISTORY=20; full params/stats/geojson stored for PDF replay.
 
 ## API endpoints
@@ -119,5 +121,5 @@ concurrent configuration races under parallel FastAPI requests.
 
 ## Version
 
-Current branch: **v2.0-react-frontend** — v1.6.0
+Current branch: **v2.0-react-frontend** — v2.0.0
 Stable Streamlit app: **main** — v1.2.0

@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.0.0] — 2026-06-01
+
+### Added
+- **Dynamic Drag-to-Simulate (Phase 8)** — Automatic recalculation on tower marker drag release, creating a real-time planning workflow.
+- **Snapped Coordinates Caching (Phase 8)** — Snaps simulation boundaries to a `0.05` degree grid (~5.5 km), aligning the bounding boxes of minor drags to hit local cached `.npy` terrain files 100% of the time, avoiding external OpenTopography API hits.
+- **Horizontal Interval GeoJSON Compression (Phase 8)** — Groups contiguous same-colored grid cells in `heatmap.py` to compress payloads by **~70%** (reducing sizes from 1.2MB to under 200KB) for faster Vercel responses and smooth map drawing.
+- **Multi-BTS Network Consolidated Coverage (Phase 7.2)** — Element-wise maximum merging (`np.maximum`) to show overlapping coverages; mapping CPEs to their best-serving BTS and sector in `/api/cpe-analysis` and CPE tables.
+- **Dynamic Map-Placement & Markers (Phase 7.3)** — Draggable BTS markers; floating map toolbar supporting Pointer mode, click-to-add custom towers, and path ruler measure.
+- **Interactive Ruler & Elevation Tool (Phase 7.4)** — Custom pin placement on map linked to `/api/terrain-profile` on arbitrary coordinates.
+- **Premium Map & Chart Polish (Phase 7.5)** — Map theme selector (Dark Matter / ESRI Satellite / Street Map); Legend overlay opacity slider (10% to 90%); interactive SVG `TerrainChart` mouse-hover guides synced with a glowing pulse locator on the Leaflet map.
+
+### Changed
+- Simple Operator Mode (`isAdvanced = false`) set as default inside the Sidebar.
+- Project version bumped to `v2.0.0`.
+
 ## [1.6.0] — 2026-05-30
 
 ### Added

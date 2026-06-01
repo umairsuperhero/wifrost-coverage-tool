@@ -17,6 +17,8 @@ export interface CpeResult {
   longitude: number;
   best_sector?: number;
   best_sector_gain_db?: number;
+  serving_bts_name?: string;
+  serving_bts_index?: number;
 }
 
 interface CpeTableProps {
@@ -31,17 +33,27 @@ export default function CpeTable({ cpeResults, selectedCpeName, onSelectCpe, sec
 
   const handleExportCsv = () => {
     if (!cpeResults || cpeResults.length === 0) return;
+    const hasServingBts = cpeResults.some((cpe: any) => cpe.serving_bts_name !== undefined && cpe.serving_bts_name !== "");
     const headers = ["Name", "Distance (km)", "Elevation (m ASL)", "RSSI (dBm)", "Link Margin (dB)", "Status", "Latitude", "Longitude"];
-    const rows = cpeResults.map((r) => [
-      `"${r.name.replace(/"/g, '""')}"`,
-      r.distance_km,
-      r.elevation_m,
-      r.rssi_dbm,
-      r.margin_db,
-      `"${r.status.replace(/🟢|🟡|🔴/g, "").trim()}"`,
-      r.latitude,
-      r.longitude,
-    ]);
+    if (hasServingBts) {
+      headers.push("Serving Tower");
+    }
+    const rows = cpeResults.map((r: any) => {
+      const row = [
+        `"${r.name.replace(/"/g, '""')}"`,
+        r.distance_km,
+        r.elevation_m,
+        r.rssi_dbm,
+        r.margin_db,
+        `"${r.status.replace(/🟢|🟡|🔴/g, "").trim()}"`,
+        r.latitude,
+        r.longitude,
+      ];
+      if (hasServingBts) {
+        row.push(`"${(r.serving_bts_name || "").replace(/"/g, '""')}"`);
+      }
+      return row;
+    });
     
     const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -110,6 +122,9 @@ export default function CpeTable({ cpeResults, selectedCpeName, onSelectCpe, sec
               <th className="py-3 px-4">RSSI</th>
               <th className="py-3 px-4">Link Margin</th>
               <th className="py-3 px-4">Sector</th>
+              {cpeResults.some((cpe: any) => cpe.serving_bts_name !== undefined && cpe.serving_bts_name !== "") && (
+                <th className="py-3 px-4">Serving Tower</th>
+              )}
               <th className="py-3 px-4">Status</th>
             </tr>
           </thead>
@@ -155,6 +170,11 @@ export default function CpeTable({ cpeResults, selectedCpeName, onSelectCpe, sec
                         <span className="text-slate-600 text-xs">—</span>
                       )}
                     </td>
+                    {cpeResults.some((c: any) => c.serving_bts_name !== undefined && c.serving_bts_name !== "") && (
+                      <td className="py-3 px-4 text-xs font-semibold text-slate-200">
+                        {cpe.serving_bts_name || "—"}
+                      </td>
+                    )}
                     <td className="py-3 px-4">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${getStatusStyle(cpe.status)}`}>
                         {cpe.status.replace(/🟢|🟡|🔴/g, "").trim()}

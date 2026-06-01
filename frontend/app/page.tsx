@@ -126,9 +126,17 @@ export default function Home() {
   // Loading States
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isProfileLoading, setIsProfileLoading] = useState<boolean>(false);
+  const [slowStart, setSlowStart] = useState(false);
 
   // Live sector state — updated immediately when user adjusts compass rose (no re-sim needed)
   const [liveSector, setLiveSector] = useState<{ azimuths: number[]; hpbw: number }>({ azimuths: [0], hpbw: 65 });
+
+  // Map Toolbar & Premium Controls States
+  const [mapMode, setMapMode] = useState<"normal" | "add-bts" | "measure">("normal");
+  const [hoverPoint, setHoverPoint] = useState<[number, number] | null>(null);
+  const [mapOpacity, setMapOpacity] = useState<number>(0.45);
+  const [mapTheme, setMapTheme] = useState<"dark" | "satellite" | "street">("dark");
+  const [measurePoints, setMeasurePoints] = useState<[number, number][]>([]);
 
   // Toast State
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "warning" } | null>(null);
@@ -164,7 +172,10 @@ export default function Home() {
     setSelectedCpe(cpe);
     setIsProfileLoading(true);
 
-    const activeBtsIdx = btsIndexOverride !== undefined ? btsIndexOverride : selectedBtsIndex;
+    let activeBtsIdx = btsIndexOverride !== undefined ? btsIndexOverride : selectedBtsIndex;
+    if (activeBtsIdx === -1 && cpe.serving_bts_index !== undefined) {
+      activeBtsIdx = cpe.serving_bts_index;
+    }
     const btsCandidates = parsedData.sites.filter((s) => s.is_bts_candidate);
     
     let activeBts = btsCandidates[activeBtsIdx];
@@ -196,10 +207,13 @@ export default function Home() {
     }
   }, [selectedBtsIndex, parsedData.sites, activeSimulationParams]);
 
-  const handleSimulate = useCallback(async (params: any) => {
+  const handleSimulate = useCallback(async (params: any, overrideSites?: any[]) => {
     setIsLoading(true);
+    setSlowStart(false);
     setTerrainProfile(null);
     setSelectedCpe(null);
+    const sitesToUse = overrideSites || parsedData.sites;
+    const slowTimer = setTimeout(() => setSlowStart(true), 8000);
     try {
       // 1. Run simulation
       const simRes = await axios.post(`${API_BASE}/api/simulate`, {
@@ -211,7 +225,7 @@ export default function Home() {
         model: params.model,
         environment: params.environment,
         srtm_key: params.srtm_key || null,
-        sites: parsedData.sites,
+        sites: sitesToUse,
         polygons: parsedData.polygons,
         lines: parsedData.lines,
         bts_height: params.bts_height,
@@ -233,7 +247,7 @@ export default function Home() {
         model: params.model,
         environment: params.environment,
         srtm_key: params.srtm_key || null,
-        sites: parsedData.sites,
+        sites: sitesToUse,
         polygons: parsedData.polygons,
         lines: parsedData.lines,
         bts_height: params.bts_height,
@@ -252,7 +266,7 @@ export default function Home() {
       // 2. Run CPE Link Margin Analysis
       const cpeRes = await axios.post(`${API_BASE}/api/cpe-analysis`, {
         bts_index: params.site_index,
-        sites: parsedData.sites,
+        sites: sitesToUse,
         frequency_mhz: params.frequency_mhz,
         model: params.model,
         environment: params.environment,
@@ -263,6 +277,9 @@ export default function Home() {
         rx_gain_dbi: params.rx_gain_dbi,
         rx_cable_loss_db: params.rx_cable_loss_db,
         rx_sensitivity_dbm: params.rx_sensitivity_dbm,
+        sector_azimuths: params.sector_azimuths,
+        hpbw_deg: params.hpbw_deg,
+        front_to_back_db: params.front_to_back_db,
       });
 
       setCpeResults(cpeRes.data.cpe_results);
@@ -274,8 +291,8 @@ export default function Home() {
         setIsProfileLoading(true);
         
         const activeBtsIdx = params.site_index;
-        const btsCandidates = parsedData.sites.filter((s) => s.is_bts_candidate);
-        let activeBts = btsCandidates[activeBtsIdx] || parsedData.sites[0];
+        const btsCandidates = sitesToUse.filter((s) => s.is_bts_candidate);
+        let activeBts = btsCandidates[activeBtsIdx] || sitesToUse[0];
         if (activeBts) {
           const profileRes = await axios.post(`${API_BASE}/api/terrain-profile`, {
             bts_latitude: activeBts.latitude,
@@ -286,7 +303,7 @@ export default function Home() {
             cpe_height: params.cpe_height,
             frequency_mhz: params.frequency_mhz,
             cpe_name: firstCpe.name,
-            sites: parsedData.sites,
+            sites: sitesToUse,
           });
           setTerrainProfile(profileRes.data);
         }
@@ -296,7 +313,9 @@ export default function Home() {
       console.error("Simulation failed:", err);
       showToast("Error running simulation. Please verify backend connection.", "error");
     } finally {
+      clearTimeout(slowTimer);
       setIsLoading(false);
+      setSlowStart(false);
     }
   }, [parsedData.sites, parsedData.polygons, parsedData.lines, showToast]);
 
@@ -310,6 +329,89 @@ export default function Home() {
       });
     }
   }, [activeSimulationParams, handleSimulate]);
+
+  const handleMoveBts = useCallback((index: number, lat: number, lng: number) => {
+    const updatedSites = [...parsedData.sites];
+    const btsCandidates = updatedSites.filter((s) => s.is_bts_candidate);
+    if (index >= 0 && index < btsCandidates.length) {
+      const actualIdx = updatedSites.indexOf(btsCandidates[index]);
+      if (actualIdx !== -1) {
+        updatedSites[actualIdx] = {
+          ...updatedSites[actualIdx],
+          latitude: Number(lat),
+          longitude: Number(lng),
+        };
+      }
+    }
+    
+    setParsedData((prev) => ({ ...prev, sites: updatedSites }));
+    showToast("Tower relocated. Recalculating coverage...", "success");
+
+    // Automatically trigger simulation recalculation on drag release
+    if (activeSimulationParams) {
+      handleSimulate({
+        ...activeSimulationParams,
+        site_index: index,
+      }, updatedSites);
+    }
+  }, [parsedData.sites, activeSimulationParams, handleSimulate, showToast]);
+
+  const handleAddBts = useCallback((lat: number, lng: number) => {
+    setParsedData((prev) => {
+      const customIndex = prev.sites.filter((s) => s.is_bts_candidate && s.name.startsWith("Custom Tower")).length + 1;
+      const newTower = {
+        name: `Custom Tower ${customIndex}`,
+        latitude: lat,
+        longitude: lng,
+        is_bts_candidate: true,
+        site_type: "BTS",
+        height_m: activeSimulationParams?.bts_height || 30.0,
+      };
+      const updatedSites = [...prev.sites, newTower];
+      const nextBtsIdx = updatedSites.filter(s => s.is_bts_candidate).length - 1;
+      setSelectedBtsIndex(nextBtsIdx);
+      return { ...prev, sites: updatedSites };
+    });
+    showToast("Custom tower added to candidates. Click 'Run Simulation' to compute coverage.", "success");
+  }, [activeSimulationParams, showToast]);
+
+  useEffect(() => {
+    if (measurePoints.length === 2) {
+      const fetchCustomMeasureProfile = async () => {
+        setIsProfileLoading(true);
+        try {
+          const res = await axios.post(`${API_BASE}/api/terrain-profile`, {
+            bts_latitude: measurePoints[0][0],
+            bts_longitude: measurePoints[0][1],
+            bts_height: activeSimulationParams?.bts_height || 30.0,
+            cpe_latitude: measurePoints[1][0],
+            cpe_longitude: measurePoints[1][1],
+            cpe_height: activeSimulationParams?.cpe_height || 10.0,
+            frequency_mhz: activeSimulationParams?.frequency_mhz || 600.0,
+            cpe_name: "Measured Path",
+            sites: parsedData.sites,
+          });
+          setTerrainProfile(res.data);
+          setSelectedCpe({
+            name: "Measured Path",
+            distance_km: res.data.profile?.[res.data.profile.length - 1]?.distance_km || 0.0,
+            elevation_m: res.data.cpe_elevation || 0.0,
+            rssi_dbm: 0.0,
+            margin_db: 0.0,
+            status: res.data.label || "Clear line of sight",
+            latitude: measurePoints[1][0],
+            longitude: measurePoints[1][1],
+          });
+        } catch (err) {
+          console.error("Failed to fetch custom terrain profile:", err);
+          showToast("Failed to fetch terrain elevation profile for measured path.", "error");
+        } finally {
+          setIsProfileLoading(false);
+        }
+      };
+      fetchCustomMeasureProfile();
+    }
+  }, [measurePoints, activeSimulationParams, parsedData.sites, showToast]);
 
   const handleLoadHistoryRun = useCallback(async (runId: string) => {
     setIsLoading(true);
@@ -460,7 +562,7 @@ export default function Home() {
                 activeScenario={activeScenario}
                 activeThreshold={activeThreshold}
                 sectorInfo={
-                  simulationResults
+                  simulationResults && selectedBtsIndex !== -1
                     ? {
                         azimuths: liveSector.azimuths,
                         hpbw: liveSector.hpbw,
@@ -468,11 +570,30 @@ export default function Home() {
                       }
                     : null
                 }
+                onMoveBts={handleMoveBts}
+                onAddBts={handleAddBts}
+                mapMode={mapMode}
+                setMapMode={setMapMode}
+                hoverPoint={hoverPoint}
+                opacity={mapOpacity}
+                setOpacity={setMapOpacity}
+                mapTheme={mapTheme}
+                setMapTheme={setMapTheme}
+                measurePoints={measurePoints}
+                setMeasurePoints={setMeasurePoints}
               />
             </div>
 
             {/* Bottom half: Results & Configuration Details */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {isLoading && slowStart && (
+                <div className="flex flex-col items-center gap-2 mt-4 text-center">
+                  <p className="text-sm text-amber-400 font-medium">⏳ Waking up the backend…</p>
+                  <p className="text-xs text-slate-400 max-w-xs">
+                    The server sleeps after inactivity. First run takes 30–50 s on the free tier. Hang tight!
+                  </p>
+                </div>
+              )}
               {simulationResults ? (
                 <>
                   {/* Results summary banner */}
@@ -536,16 +657,37 @@ export default function Home() {
                             <p className="text-sm">Generating terrain profile...</p>
                           </div>
                         ) : (
-                          <TerrainChart
-                            profileData={terrainProfile?.profile || []}
-                            label={terrainProfile?.label || ""}
-                            isFlat={terrainProfile?.is_flat || false}
-                            cpeName={selectedCpe?.name || "CPE"}
-                            btsElevation={terrainProfile?.bts_elevation}
-                            cpeElevation={terrainProfile?.cpe_elevation}
-                            btsTotalHeight={terrainProfile?.bts_total_height}
-                            cpeTotalHeight={terrainProfile?.cpe_total_height}
-                          />
+                          (() => {
+                            const btsCandidates = parsedData.sites.filter((s) => s.is_bts_candidate);
+                            const activeBtsForProfile = selectedBtsIndex === -1 && selectedCpe?.serving_bts_index !== undefined
+                              ? btsCandidates[selectedCpe.serving_bts_index]
+                              : btsCandidates[selectedBtsIndex];
+                            
+                            const btsLatForProfile = selectedCpe?.name === "Measured Path" && measurePoints.length > 0
+                              ? measurePoints[0][0]
+                              : activeBtsForProfile?.latitude;
+                            const btsLonForProfile = selectedCpe?.name === "Measured Path" && measurePoints.length > 0
+                              ? measurePoints[0][1]
+                              : activeBtsForProfile?.longitude;
+
+                            return (
+                              <TerrainChart
+                                profileData={terrainProfile?.profile || []}
+                                label={terrainProfile?.label || ""}
+                                isFlat={terrainProfile?.is_flat || false}
+                                cpeName={selectedCpe?.name || "CPE"}
+                                btsElevation={terrainProfile?.bts_elevation}
+                                cpeElevation={terrainProfile?.cpe_elevation}
+                                btsTotalHeight={terrainProfile?.bts_total_height}
+                                cpeTotalHeight={terrainProfile?.cpe_total_height}
+                                btsLat={btsLatForProfile}
+                                btsLon={btsLonForProfile}
+                                cpeLat={selectedCpe?.latitude}
+                                cpeLon={selectedCpe?.longitude}
+                                onHoverPoint={setHoverPoint}
+                              />
+                            );
+                          })()
                         )}
                       </div>
                     ) : (
