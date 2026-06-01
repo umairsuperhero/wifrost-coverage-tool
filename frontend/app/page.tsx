@@ -134,7 +134,7 @@ export default function Home() {
   const [liveSector, setLiveSector] = useState<{ azimuths: number[]; hpbw: number }>({ azimuths: [0], hpbw: 65 });
 
   // Map Toolbar & Premium Controls States
-  const [mapMode, setMapMode] = useState<"normal" | "add-bts" | "measure">("normal");
+  const [mapMode, setMapMode] = useState<"normal" | "measure">("normal");
   const [hoverPoint, setHoverPoint] = useState<[number, number] | null>(null);
   const [mapOpacity, setMapOpacity] = useState<number>(0.45);
   const [mapTheme, setMapTheme] = useState<"dark" | "satellite" | "street">("dark");
@@ -358,25 +358,6 @@ export default function Home() {
     }
   }, [parsedData.sites, activeSimulationParams, handleSimulate, showToast]);
 
-  const handleAddBts = useCallback((lat: number, lng: number) => {
-    setParsedData((prev) => {
-      const customIndex = prev.sites.filter((s) => s.is_bts_candidate && s.name.startsWith("Custom Tower")).length + 1;
-      const newTower = {
-        name: `Custom Tower ${customIndex}`,
-        latitude: lat,
-        longitude: lng,
-        is_bts_candidate: true,
-        site_type: "BTS",
-        height_m: activeSimulationParams?.bts_height || 30.0,
-      };
-      const updatedSites = [...prev.sites, newTower];
-      const nextBtsIdx = updatedSites.filter(s => s.is_bts_candidate).length - 1;
-      setSelectedBtsIndex(nextBtsIdx);
-      return { ...prev, sites: updatedSites };
-    });
-    showToast("Custom tower added to candidates. Click 'Run Simulation' to compute coverage.", "success");
-  }, [activeSimulationParams, showToast]);
-
   useEffect(() => {
     if (measurePoints.length === 2) {
       const fetchCustomMeasureProfile = async () => {
@@ -573,7 +554,6 @@ export default function Home() {
                     : null
                 }
                 onMoveBts={handleMoveBts}
-                onAddBts={handleAddBts}
                 mapMode={mapMode}
                 setMapMode={setMapMode}
                 hoverPoint={hoverPoint}

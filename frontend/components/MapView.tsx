@@ -28,9 +28,8 @@ interface MapViewProps {
   activeScenario?: "best" | "realistic" | "conservative";
   activeThreshold?: number;
   onMoveBts?: (index: number, lat: number, lng: number) => void;
-  onAddBts?: (lat: number, lng: number) => void;
-  mapMode?: "normal" | "add-bts" | "measure";
-  setMapMode?: (mode: "normal" | "add-bts" | "measure") => void;
+  mapMode?: "normal" | "measure";
+  setMapMode?: (mode: "normal" | "measure") => void;
   hoverPoint?: [number, number] | null;
   opacity?: number;
   setOpacity?: (opacity: number) => void;

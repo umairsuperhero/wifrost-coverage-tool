@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { MapContainer, TileLayer, Marker, Popup, GeoJSON, Polygon, Polyline, CircleMarker, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, GeoJSON, Polygon, Polyline, CircleMarker, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
-import { MousePointer, RadioTower, Ruler } from "lucide-react";
+import { MousePointer, Ruler } from "lucide-react";
 
 // Custom Leaflet CSS DivIcons to enable modern styling
 const getBtsIcon = (isActive: boolean) => {
@@ -117,9 +117,8 @@ interface MapInnerProps {
   activeScenario?: "best" | "realistic" | "conservative";
   activeThreshold?: number;
   onMoveBts?: (index: number, lat: number, lng: number) => void;
-  onAddBts?: (lat: number, lng: number) => void;
-  mapMode?: "normal" | "add-bts" | "measure";
-  setMapMode?: (mode: "normal" | "add-bts" | "measure") => void;
+  mapMode?: "normal" | "measure";
+  setMapMode?: (mode: "normal" | "measure") => void;
   hoverPoint?: [number, number] | null;
   opacity?: number;
   setOpacity?: (opacity: number) => void;
@@ -167,7 +166,6 @@ export default function MapInner({
   activeScenario = "realistic",
   activeThreshold = -89.0,
   onMoveBts,
-  onAddBts,
   mapMode = "normal",
   setMapMode,
   hoverPoint,
@@ -212,14 +210,21 @@ export default function MapInner({
 
   const btsCandidates = sites.filter((s) => s.is_bts_candidate);
 
+  const haversineKm = (a: [number, number], b: [number, number]) => {
+    const R = 6371;
+    const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+    const dLon = ((b[1] - a[1]) * Math.PI) / 180;
+    const lat1 = (a[0] * Math.PI) / 180;
+    const lat2 = (b[0] * Math.PI) / 180;
+    const x = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.asin(Math.sqrt(x));
+  };
+
   // Map clicks helper component
   function MapEventsHelper() {
     useMapEvents({
       click(e) {
-        if (mapMode === "add-bts" && onAddBts) {
-          onAddBts(e.latlng.lat, e.latlng.lng);
-          if (setMapMode) setMapMode("normal");
-        } else if (mapMode === "measure" && setMeasurePoints) {
+        if (mapMode === "measure" && setMeasurePoints) {
           const newPoints = [...measurePoints, [e.latlng.lat, e.latlng.lng] as [number, number]];
           if (newPoints.length > 2) {
             setMeasurePoints([[e.latlng.lat, e.latlng.lng]]);
@@ -414,7 +419,11 @@ export default function MapInner({
         {measurePoints.length > 1 && (
           <>
             <Marker position={measurePoints[1]} icon={getEndPinIcon()} />
-            <Polyline positions={measurePoints} pathOptions={{ color: "#3B82F6", weight: 3, dashArray: "6,6" }} />
+            <Polyline positions={measurePoints} pathOptions={{ color: "#3B82F6", weight: 3, dashArray: "6,6" }}>
+              <Tooltip permanent direction="center" className="measure-distance-tooltip">
+                {haversineKm(measurePoints[0], measurePoints[1]).toFixed(2)} km
+              </Tooltip>
+            </Polyline>
           </>
         )}
 
@@ -450,20 +459,6 @@ export default function MapInner({
           }`}
         >
           <MousePointer className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => {
-            if (setMapMode) setMapMode("add-bts");
-            if (setMeasurePoints) setMeasurePoints([]);
-          }}
-          title="Add Custom Tower Candidate"
-          className={`p-2 rounded-md transition ${
-            mapMode === "add-bts"
-              ? "bg-blue-600 text-white font-bold"
-              : "text-slate-400 hover:text-white hover:bg-slate-800"
-          }`}
-        >
-          <RadioTower className="w-4 h-4" />
         </button>
         <button
           onClick={() => {
