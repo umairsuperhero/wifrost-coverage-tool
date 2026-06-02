@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { MapContainer, TileLayer, Marker, Popup, GeoJSON, Polygon, Polyline, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, GeoJSON, Polygon, Polyline, CircleMarker, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
+import { MousePointer, Ruler } from "lucide-react";
 
-// Custom Leaflet CSS DivIcons to avoid path issues and enable modern styling
+// Custom Leaflet CSS DivIcons to enable modern styling
 const getBtsIcon = (isActive: boolean) => {
   return L.divIcon({
     html: `<div class="relative flex items-center justify-center">
@@ -20,6 +21,12 @@ const getBtsIcon = (isActive: boolean) => {
     iconAnchor: [20, 20],
     popupAnchor: [0, -10],
   });
+};
+
+const getCpeColor = (margin_db: number): string => {
+  if (margin_db >= 10) return "#22C55E"; // emerald-500 — good
+  if (margin_db >= 0)  return "#F59E0B"; // amber-500  — marginal
+  return "#EF4444";                       // red-500    — fail
 };
 
 const getCpeIcon = (status: string, isSelected: boolean) => {
@@ -41,6 +48,24 @@ const getCpeIcon = (status: string, isSelected: boolean) => {
     popupAnchor: [0, -10],
   });
 };
+
+const getStartPinIcon = () => L.divIcon({
+  html: `<div class="relative flex items-center justify-center">
+    <div class="w-3.5 h-3.5 rounded-full bg-blue-500 border-2 border-white shadow-md animate-bounce"></div>
+  </div>`,
+  className: "start-pin-icon",
+  iconSize: [14, 14],
+  iconAnchor: [7, 7]
+});
+
+const getEndPinIcon = () => L.divIcon({
+  html: `<div class="relative flex items-center justify-center">
+    <div class="w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white shadow-md animate-bounce"></div>
+  </div>`,
+  className: "end-pin-icon",
+  iconSize: [14, 14],
+  iconAnchor: [7, 7]
+});
 
 // Map controller to dynamically update center and fit bounds when data changes
 function MapController({ sites, polygons, lines }: { sites: any[]; polygons: any[]; lines: any[] }) {
@@ -91,6 +116,16 @@ interface MapInnerProps {
   sectorInfo?: SectorInfo | null;
   activeScenario?: "best" | "realistic" | "conservative";
   activeThreshold?: number;
+  onMoveBts?: (index: number, lat: number, lng: number) => void;
+  mapMode?: "normal" | "measure";
+  setMapMode?: (mode: "normal" | "measure") => void;
+  hoverPoint?: [number, number] | null;
+  opacity?: number;
+  setOpacity?: (opacity: number) => void;
+  mapTheme?: "dark" | "satellite" | "street";
+  setMapTheme?: (theme: "dark" | "satellite" | "street") => void;
+  measurePoints?: [number, number][];
+  setMeasurePoints?: (points: [number, number][]) => void;
 }
 
 function sectorPolygon(
@@ -130,14 +165,44 @@ export default function MapInner({
   sectorInfo,
   activeScenario = "realistic",
   activeThreshold = -89.0,
+  onMoveBts,
+  mapMode = "normal",
+  setMapMode,
+  hoverPoint,
+  opacity = 0.45,
+  setOpacity,
+  mapTheme = "dark",
+  setMapTheme,
+  measurePoints = [],
+  setMeasurePoints,
 }: MapInnerProps) {
   // Default center Buonaventura Colombia (SPRBUN)
   const defaultCenter: [number, number] = [3.89, -77.08];
 
+  const getTileUrl = () => {
+    if (mapTheme === "satellite") {
+      return "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+    }
+    if (mapTheme === "street") {
+      return "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+    }
+    return "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+  };
+
+  const getTileAttribution = () => {
+    if (mapTheme === "satellite") {
+      return "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community";
+    }
+    if (mapTheme === "street") {
+      return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+    }
+    return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+  };
+
   const geojsonStyle = (feature: any) => {
     return {
       fillColor: feature.properties.fill,
-      fillOpacity: feature.properties["fill-opacity"] || 0.45,
+      fillOpacity: opacity,
       stroke: false,
       weight: 0,
     };
@@ -145,14 +210,45 @@ export default function MapInner({
 
   const btsCandidates = sites.filter((s) => s.is_bts_candidate);
 
+  const haversineKm = (a: [number, number], b: [number, number]) => {
+    const R = 6371;
+    const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+    const dLon = ((b[1] - a[1]) * Math.PI) / 180;
+    const lat1 = (a[0] * Math.PI) / 180;
+    const lat2 = (b[0] * Math.PI) / 180;
+    const x = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.asin(Math.sqrt(x));
+  };
+
+  // Map clicks helper component
+  function MapEventsHelper() {
+    useMapEvents({
+      click(e) {
+        if (mapMode === "measure" && setMeasurePoints) {
+          const newPoints = [...measurePoints, [e.latlng.lat, e.latlng.lng] as [number, number]];
+          if (newPoints.length > 2) {
+            setMeasurePoints([[e.latlng.lat, e.latlng.lng]]);
+          } else {
+            setMeasurePoints(newPoints);
+          }
+        }
+      }
+    });
+    return null;
+  }
+
   return (
-    <div className="w-full h-full relative">
+    <div className={`w-full h-full relative ${mapMode !== "normal" ? "cursor-crosshair" : ""}`}>
       <MapContainer center={defaultCenter} zoom={13} className="w-full h-full">
-        {/* CartoDB Dark Matter map tiles */}
+        {/* Switchable map tiles */}
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          key={mapTheme}
+          url={getTileUrl()}
+          attribution={getTileAttribution()}
         />
+
+        {/* Map events click handler */}
+        <MapEventsHelper />
 
         {/* Map Controller */}
         <MapController sites={sites} polygons={polygons} lines={lines} />
@@ -191,7 +287,7 @@ export default function MapInner({
         {/* Heatmap GeoJSON Layer */}
         {coverageGeojson && (
           <GeoJSON
-            key={`${activeScenario}-${activeThreshold}-${JSON.stringify(coverageGeojson.features?.[0]?.properties || {})}`}
+            key={`${activeScenario}-${activeThreshold}-${opacity}-${JSON.stringify(coverageGeojson.features?.[0]?.properties || {})}`}
             data={coverageGeojson}
             style={geojsonStyle}
             filter={(feature) => {
@@ -204,7 +300,7 @@ export default function MapInner({
         )}
 
         {/* Sector wedge overlays — shown after simulation only */}
-        {sectorInfo && btsCandidates[selectedBtsIndex] &&
+        {selectedBtsIndex !== -1 && sectorInfo && btsCandidates[selectedBtsIndex] &&
           sectorInfo.azimuths.map((az, i) => {
             const bts = btsCandidates[selectedBtsIndex];
             const pts = sectorPolygon(bts.latitude, bts.longitude, az, sectorInfo.hpbw, sectorInfo.radiusKm);
@@ -228,13 +324,25 @@ export default function MapInner({
 
         {/* BTS Site Markers */}
         {btsCandidates.map((site, index) => {
-          // Check if this BTS is active
-          // Note: index matches btsCandidates
           const isActive = index === selectedBtsIndex;
           const latLng: [number, number] = [site.latitude, site.longitude];
 
           return (
-            <Marker key={`bts-${index}`} position={latLng} icon={getBtsIcon(isActive)}>
+            <Marker
+              key={`bts-${index}`}
+              position={latLng}
+              icon={getBtsIcon(isActive)}
+              draggable={true}
+              eventHandlers={{
+                dragend: (e) => {
+                  const marker = e.target;
+                  const position = marker.getLatLng();
+                  if (onMoveBts) {
+                    onMoveBts(index, position.lat, position.lng);
+                  }
+                }
+              }}
+            >
               <Popup>
                 <div className="text-xs space-y-2">
                   <div>
@@ -244,7 +352,7 @@ export default function MapInner({
                   {!isActive && (
                     <button
                       onClick={() => onSelectBts(index)}
-                      className="px-2 py-1 bg-amber-500 text-slate-950 font-semibold rounded hover:bg-amber-400 text-[10px] w-full transition cursor-pointer"
+                      className="px-2 py-1 bg-amber-500 text-slate-950 font-semibold rounded hover:bg-amber-400 text-[10px] w-full transition cursor-pointer border-none"
                     >
                       Set as Active BTS
                     </button>
@@ -258,13 +366,17 @@ export default function MapInner({
         {/* CPE client Markers */}
         {cpeResults.map((cpe, index) => {
           const isSelected = cpe.name === selectedCpeName;
-          const latLng: [number, number] = [cpe.latitude, cpe.longitude];
+          const color = getCpeColor(cpe.margin_db);
 
           return (
-            <Marker
+            <CircleMarker
               key={`cpe-${index}`}
-              position={latLng}
-              icon={getCpeIcon(cpe.status, isSelected)}
+              center={[cpe.latitude, cpe.longitude]}
+              radius={isSelected ? 9 : 6}
+              weight={isSelected ? 2 : 1}
+              color={color}
+              fillColor={color}
+              fillOpacity={0.9}
               eventHandlers={{
                 click: () => onSelectCpe(cpe),
               }}
@@ -272,6 +384,9 @@ export default function MapInner({
               <Popup>
                 <div className="text-xs space-y-1">
                   <span className="font-bold text-white block">{cpe.name}</span>
+                  {cpe.serving_bts_name && (
+                    <span className="text-[10px] text-amber-300 block">Server: {cpe.serving_bts_name}</span>
+                  )}
                   <div className="grid grid-cols-2 gap-x-2 text-[10px]">
                     <span className="text-slate-400">Distance:</span>
                     <span className="text-right">{cpe.distance_km.toFixed(2)} km</span>
@@ -293,10 +408,86 @@ export default function MapInner({
                   <span className="text-[9px] text-slate-500 block mt-1">Click in table to show terrain profile</span>
                 </div>
               </Popup>
-            </Marker>
+            </CircleMarker>
           );
         })}
+
+        {/* Measure Tool Rendering */}
+        {measurePoints.length > 0 && (
+          <Marker position={measurePoints[0]} icon={getStartPinIcon()} />
+        )}
+        {measurePoints.length > 1 && (
+          <>
+            <Marker position={measurePoints[1]} icon={getEndPinIcon()} />
+            <Polyline positions={measurePoints} pathOptions={{ color: "#3B82F6", weight: 3, dashArray: "6,6" }}>
+              <Tooltip permanent direction="center" className="measure-distance-tooltip">
+                {haversineKm(measurePoints[0], measurePoints[1]).toFixed(2)} km
+              </Tooltip>
+            </Polyline>
+          </>
+        )}
+
+        {/* Live Hover Pulse Marker */}
+        {hoverPoint && (
+          <Marker
+            position={hoverPoint}
+            icon={L.divIcon({
+              html: `<div class="relative flex items-center justify-center">
+                <span class="absolute w-8 h-8 rounded-full bg-blue-500/40 animate-ping"></span>
+                <div class="w-3 h-3 rounded-full bg-blue-500 border border-white shadow-lg"></div>
+              </div>`,
+              className: "hover-pulse-icon",
+              iconSize: [24, 24],
+              iconAnchor: [12, 12],
+            })}
+          />
+        )}
       </MapContainer>
+
+      {/* Map Mode Floating Toolbar Overlay */}
+      <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-1.5 bg-slate-900/90 border border-slate-800 p-1.5 rounded-lg shadow-xl backdrop-blur max-w-[120px]">
+        <button
+          onClick={() => {
+            if (setMapMode) setMapMode("normal");
+            if (setMeasurePoints) setMeasurePoints([]);
+          }}
+          title="Pan & Selection Mode"
+          className={`p-2 rounded-md transition ${
+            mapMode === "normal"
+              ? "bg-blue-600 text-white font-bold"
+              : "text-slate-400 hover:text-white hover:bg-slate-800"
+          }`}
+        >
+          <MousePointer className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => {
+            if (setMapMode) setMapMode("measure");
+            if (setMeasurePoints) setMeasurePoints([]);
+          }}
+          title="Interactive Distance & Profile Measure Tool"
+          className={`p-2 rounded-md transition ${
+            mapMode === "measure"
+              ? "bg-blue-600 text-white font-bold"
+              : "text-slate-400 hover:text-white hover:bg-slate-800"
+          }`}
+        >
+          <Ruler className="w-4 h-4" />
+        </button>
+        
+        <div className="border-t border-slate-800 my-1"></div>
+        
+        {/* Theme Select Switcher */}
+        <select
+          value={mapTheme}
+          onChange={(e) => setMapTheme && setMapTheme(e.target.value as any)}
+          className="bg-slate-950 text-[10px] text-slate-300 border border-slate-800 rounded px-1 py-1 focus:outline-none focus:border-blue-500 w-full"
+        >
+          <option value="dark">Dark Matter</option>
+          <option value="satellite">Satellite</option>
+          <option value="street">Street Map</option>
+        </select>
+      </div>
 
       {/* Map Legend Overlay */}
       <div className="absolute bottom-4 left-4 z-[1000] p-3 rounded-lg border border-slate-800 bg-slate-900/90 backdrop-blur text-xs text-slate-300 space-y-2 max-w-[200px]">
@@ -314,6 +505,24 @@ export default function MapInner({
             <span className="w-3 h-3 rounded bg-[#f1c40f] block" />
             <span>Marginal (-75 to -85)</span>
           </div>
+          
+          {/* Opacity Slider */}
+          <div className="border-t border-slate-800 my-1 pt-1.5 space-y-1">
+            <div className="flex justify-between text-[9px] text-slate-400">
+              <span>Grid Opacity</span>
+              <span>{Math.round(opacity * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min="0.1"
+              max="0.9"
+              step="0.05"
+              value={opacity}
+              onChange={(e) => setOpacity && setOpacity(Number(e.target.value))}
+              className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+            />
+          </div>
+
           <div className="border-t border-slate-800 my-1 pt-1.5 space-y-1.5">
             <div className="flex items-center gap-2">
               <span className="w-3.5 h-3.5 rounded-full bg-amber-500 border border-white flex items-center justify-center"><span className="w-1.5 h-1.5 rounded-full bg-slate-950"></span></span>

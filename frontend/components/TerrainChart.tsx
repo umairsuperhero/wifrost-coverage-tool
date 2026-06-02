@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { AlertCircle, Activity } from "lucide-react";
 
 interface ProfilePoint {
@@ -20,6 +20,11 @@ interface TerrainChartProps {
   cpeElevation?: number;
   btsTotalHeight?: number;
   cpeTotalHeight?: number;
+  btsLat?: number;
+  btsLon?: number;
+  cpeLat?: number;
+  cpeLon?: number;
+  onHoverPoint?: (coords: [number, number] | null) => void;
 }
 
 export default function TerrainChart({
@@ -31,7 +36,14 @@ export default function TerrainChart({
   cpeElevation = 0,
   btsTotalHeight = 0,
   cpeTotalHeight = 0,
+  btsLat,
+  btsLon,
+  cpeLat,
+  cpeLon,
+  onHoverPoint,
 }: TerrainChartProps) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
   if (isFlat) {
     return (
       <div className="bg-slate-900/60 rounded-xl border border-slate-800 p-5 flex flex-col items-center justify-center h-[280px] text-slate-400">
@@ -46,7 +58,7 @@ export default function TerrainChart({
     return (
       <div className="bg-slate-900/60 rounded-xl border border-slate-800 p-5 flex flex-col items-center justify-center h-[280px] text-slate-400">
         <Activity className="w-8 h-8 text-slate-500 mb-2" />
-        <p className="text-sm">Select a CPE site to view the terrain profile.</p>
+        <p className="text-sm">Select a CPE site or use the map Ruler to view the terrain profile.</p>
       </div>
     );
   }
@@ -113,8 +125,48 @@ export default function TerrainChart({
 
   const isObstructed = label.includes("⚠️") || label.toLowerCase().includes("obstruction");
 
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement, MouseEvent>) => {
+    if (!profileData || profileData.length === 0) return;
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    const xRelative = e.clientX - rect.left;
+    const xSvg = (xRelative / rect.width) * width;
+    
+    if (xSvg < paddingX || xSvg > width - paddingX) {
+      setHoverIdx(null);
+      if (onHoverPoint) onHoverPoint(null);
+      return;
+    }
+    
+    const pct = (xSvg - paddingX) / (width - 2 * paddingX);
+    const targetDist = pct * maxDist;
+    
+    let closestIdx = 0;
+    let minDiff = Infinity;
+    profileData.forEach((pt, i) => {
+      const diff = Math.abs(pt.distance_km - targetDist);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIdx = i;
+      }
+    });
+    
+    setHoverIdx(closestIdx);
+    
+    if (onHoverPoint && btsLat !== undefined && btsLon !== undefined && cpeLat !== undefined && cpeLon !== undefined) {
+      const lat = btsLat + pct * (cpeLat - btsLat);
+      const lng = btsLon + pct * (cpeLon - btsLon);
+      onHoverPoint([lat, lng]);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setHoverIdx(null);
+    if (onHoverPoint) onHoverPoint(null);
+  };
+
   return (
-    <div className="bg-slate-900/60 rounded-xl border border-slate-800 p-5 space-y-4">
+    <div className="bg-slate-900/60 rounded-xl border border-slate-800 p-5 space-y-4 relative">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-3 gap-2">
         <div className="flex items-center gap-2">
           <Activity className="w-5 h-5 text-blue-400" />
@@ -131,8 +183,32 @@ export default function TerrainChart({
         </span>
       </div>
 
+      {/* Floating Hover Tooltip Panel */}
+      {hoverIdx !== null && profileData[hoverIdx] && (
+        <div className="absolute top-16 left-[70px] bg-slate-950/95 border border-sky-500/30 p-2.5 rounded-lg shadow-xl text-[10px] space-y-1 backdrop-blur text-slate-300 pointer-events-none z-[100]">
+          <p className="font-bold text-sky-400">Point at {profileData[hoverIdx].distance_km.toFixed(2)} km</p>
+          <div className="grid grid-cols-2 gap-x-3 text-slate-400">
+            <span>Terrain Height:</span>
+            <span className="text-right text-white font-medium">{Math.round(profileData[hoverIdx].terrain_m)} m</span>
+            <span>LoS Elevation:</span>
+            <span className="text-right text-white font-medium">{Math.round(profileData[hoverIdx].los_m)} m</span>
+            <span>Fresnel Clearance:</span>
+            <span className={`text-right font-semibold ${
+              profileData[hoverIdx].los_m - profileData[hoverIdx].terrain_m >= 0 ? "text-emerald-400" : "text-red-400"
+            }`}>
+              {(profileData[hoverIdx].los_m - profileData[hoverIdx].terrain_m).toFixed(1)} m
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="relative w-full overflow-x-auto bg-slate-950/40 rounded-lg p-2 border border-slate-850">
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full min-w-[700px] h-auto overflow-visible">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="w-full min-w-[700px] h-auto overflow-visible select-none"
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+        >
           {/* Grid lines */}
           {[0, 0.25, 0.5, 0.75, 1].map((pct, idx) => {
             const h = yMin + pct * yRange;
@@ -179,6 +255,29 @@ export default function TerrainChart({
           <text x={getX(maxDist)} y={getY(cpeTotalHeight) - 10} fill="#FFFFFF" fontSize="10" fontWeight="bold" textAnchor="middle">
             {cpeName} ({cpeTotalHeight - cpeElevation}m)
           </text>
+
+          {/* Hover Vertical Guide Line & Point */}
+          {hoverIdx !== null && profileData[hoverIdx] && (
+            <>
+              <line
+                x1={getX(profileData[hoverIdx].distance_km)}
+                y1={paddingY}
+                x2={getX(profileData[hoverIdx].distance_km)}
+                y2={height - paddingY}
+                stroke="#0EA5E9"
+                strokeWidth="1"
+                strokeDasharray="4,4"
+              />
+              <circle
+                cx={getX(profileData[hoverIdx].distance_km)}
+                cy={getY(profileData[hoverIdx].terrain_m)}
+                r="4.5"
+                fill="#38BDF8"
+                stroke="#FFFFFF"
+                strokeWidth="1"
+              />
+            </>
+          )}
 
           {/* Gradients */}
           <defs>

@@ -214,7 +214,8 @@ async def parse_file(file: UploadFile = File(...)):
             os.remove(tmp_path)
 
 def build_bounding_box(sites, polygons, lines):
-    """Calculate the padded bounding box coordinates around the project features."""
+    """Calculate the padded bounding box coordinates snapped to 0.05 degrees to optimize cache hits."""
+    import math
     lats = [s["latitude"] for s in sites]
     lons = [s["longitude"] for s in sites]
     for poly in polygons:
@@ -230,11 +231,18 @@ def build_bounding_box(sites, polygons, lines):
     pad_lat = 0.04
     pad_lon = 0.04 / math_cos_radians((min_lat + max_lat) / 2.0)
     
+    # Snap bounds to nearest 0.05 degrees (~5.5km) to align caching grids during minor tower dragging
+    snap = 0.05
+    b_min_lat = math.floor((min_lat - pad_lat) / snap) * snap
+    b_max_lat = math.ceil((max_lat + pad_lat) / snap) * snap
+    b_min_lon = math.floor((min_lon - pad_lon) / snap) * snap
+    b_max_lon = math.ceil((max_lon + pad_lon) / snap) * snap
+    
     return {
-        "minLat": min_lat - pad_lat,
-        "maxLat": max_lat + pad_lat,
-        "minLon": min_lon - pad_lon,
-        "maxLon": max_lon + pad_lon
+        "minLat": round(b_min_lat, 4),
+        "maxLat": round(b_max_lat, 4),
+        "minLon": round(b_min_lon, 4),
+        "maxLon": round(b_max_lon, 4)
     }
 
 def math_cos_radians(deg):
@@ -253,20 +261,29 @@ def simulate(req: SimulateRequest):
         req.sites[0]["is_bts_candidate"] = True
         bts_candidates = [req.sites[0]]
         
-    if req.site_index >= len(bts_candidates):
-        raise HTTPException(status_code=400, detail=f"Active BTS index {req.site_index} is out of bounds.")
-        
-    active_bts_dict = bts_candidates[req.site_index]
-    # Reconstruct KMLPoint
-    active_bts = KMLPoint(
-        name=active_bts_dict["name"],
-        latitude=active_bts_dict["latitude"],
-        longitude=active_bts_dict["longitude"],
-        description=active_bts_dict.get("description", ""),
-        is_bts_candidate=True,
-        height_m=req.bts_height,
-        site_type="BTS"
-    )
+    if req.site_index == -1:
+        active_bts = KMLPoint(
+            name="All Towers (Consolidated)",
+            latitude=float(np.mean([s["latitude"] for s in bts_candidates])) if bts_candidates else 0.0,
+            longitude=float(np.mean([s["longitude"] for s in bts_candidates])) if bts_candidates else 0.0,
+            description="Merged coverage grid for all candidate towers.",
+            is_bts_candidate=True,
+            height_m=req.bts_height,
+            site_type="BTS"
+        )
+    else:
+        if req.site_index >= len(bts_candidates):
+            raise HTTPException(status_code=400, detail=f"Active BTS index {req.site_index} is out of bounds.")
+        active_bts_dict = bts_candidates[req.site_index]
+        active_bts = KMLPoint(
+            name=active_bts_dict["name"],
+            latitude=active_bts_dict["latitude"],
+            longitude=active_bts_dict["longitude"],
+            description=active_bts_dict.get("description", ""),
+            is_bts_candidate=True,
+            height_m=req.bts_height,
+            site_type="BTS"
+        )
     
     # Bounding box
     bounds = build_bounding_box(req.sites, req.polygons, req.lines)
@@ -296,18 +313,46 @@ def simulate(req: SimulateRequest):
 
     # Generate standard coverage grid
     resolution_m = 100.0
-    grid = compute_coverage_grid(
-        bts_site=active_bts,
-        equipment_bts=eb,
-        equipment_cpe=ec,
-        f_mhz=req.frequency_mhz,
-        bounds=bounds,
-        terrain_grid=terrain_grid,
-        resolution_m=resolution_m,
-        model=req.model,
-        environment=env,
-        bts_height_override=req.bts_height
-    )
+    if req.site_index == -1:
+        grids = []
+        for site in bts_candidates:
+            bts_i = KMLPoint(
+                name=site["name"],
+                latitude=site["latitude"],
+                longitude=site["longitude"],
+                description=site.get("description", ""),
+                is_bts_candidate=True,
+                height_m=req.bts_height,
+                site_type="BTS"
+            )
+            grid_i = compute_coverage_grid(
+                bts_site=bts_i,
+                equipment_bts=eb,
+                equipment_cpe=ec,
+                f_mhz=req.frequency_mhz,
+                bounds=bounds,
+                terrain_grid=terrain_grid,
+                resolution_m=resolution_m,
+                model=req.model,
+                environment=env,
+                bts_height_override=req.bts_height
+            )
+            grids.append(grid_i)
+        from heatmap import merge_coverage_grids
+        grid = merge_coverage_grids(grids, resolution_m)
+    else:
+        grid = compute_coverage_grid(
+            bts_site=active_bts,
+            equipment_bts=eb,
+            equipment_cpe=ec,
+            f_mhz=req.frequency_mhz,
+            bounds=bounds,
+            terrain_grid=terrain_grid,
+            resolution_m=resolution_m,
+            model=req.model,
+            environment=env,
+            bts_height_override=req.bts_height
+        )
     
     # Generate three scenarios: Best, Realistic, Conservative
     # Realistic uses req.system_margin_db (e.g. 20 dB margin, meaning threshold RSSI = sensitivity + 20)
@@ -337,9 +382,12 @@ def simulate(req: SimulateRequest):
     avg_cons = float(np.mean(grid.rssi_array[grid.rssi_array >= thresh_cons])) if np.any(grid.rssi_array >= thresh_cons) else -110.0
 
     # Format result banner text
-    plain_english = f"The site {active_bts.name} ({req.bts_height:.1f}m) covers {cov_real:.1f}% of the desired area at {req.frequency_mhz:.1f} MHz. Recommended."
-    if cov_real < 85.0:
-        plain_english = f"The site {active_bts.name} only covers {cov_real:.1f}%. Consider increasing height or using an alternative location."
+    if req.site_index == -1:
+        plain_english = f"The consolidated network of {len(bts_candidates)} towers covers {cov_real:.1f}% of the desired area at {req.frequency_mhz:.1f} MHz. Recommended."
+    else:
+        plain_english = f"The site {active_bts.name} ({req.bts_height:.1f}m) covers {cov_real:.1f}% of the desired area at {req.frequency_mhz:.1f} MHz. Recommended."
+        if cov_real < 85.0:
+            plain_english = f"The site {active_bts.name} only covers {cov_real:.1f}%. Consider increasing height or using an alternative location."
         
     # Generate GeoJSON using threshold_dbm = thresh_best so frontend can filter dynamically
     geojson_data = coverage_to_geojson(grid, threshold_dbm=thresh_best)
@@ -353,6 +401,10 @@ def simulate(req: SimulateRequest):
         "cpe_height": req.cpe_height,
         "environment": req.environment,
         "model": req.model,
+        "sector_azimuths": req.sector_azimuths,
+        "hpbw_deg": req.hpbw_deg,
+        "vpbw_deg": req.vpbw_deg,
+        "front_to_back_db": req.front_to_back_db,
     }, sort_keys=True).encode()).hexdigest()
     
     # Evict oldest entries if cache is full
@@ -466,11 +518,9 @@ def cpe_analysis(req: CpeAnalysisRequest):
         req.sites[0]["is_bts_candidate"] = True
         bts_candidates = [req.sites[0]]
         
-    if req.bts_index >= len(bts_candidates):
+    if req.bts_index != -1 and req.bts_index >= len(bts_candidates):
         raise HTTPException(status_code=400, detail=f"Active BTS index {req.bts_index} is out of bounds.")
         
-    active_bts = bts_candidates[req.bts_index]
-    
     # Bounding box
     bounds = build_bounding_box(req.sites, [], [])
     
@@ -482,59 +532,81 @@ def cpe_analysis(req: CpeAnalysisRequest):
     cpe_results = []
 
     eirp = compute_eirp(req.tx_power_dbm, req.antenna_gain_dbi, req.cable_loss_db)
-    multi_sector = len(req.sector_azimuths) > 1
-
     covered_count = 0
 
     for idx, s in enumerate(cpe_sites):
-        d_km = haversine_distance(active_bts["latitude"], active_bts["longitude"], s["latitude"], s["longitude"])
-        if d_km < 0.01:
-            d_km = 0.01
+        best_rssi = -999.0
+        best_margin = -999.0
+        best_dist = 0.0
+        best_sec = 0
+        best_sg = 0.0
+        best_bts_idx = -1
+        best_bts_name = ""
 
-        cpe_height = s.get("height_m") or 10.0
+        candidates_to_check = bts_candidates if req.bts_index == -1 else [bts_candidates[req.bts_index]]
 
-        if req.model == "terrain_aware" and not terrain_grid.is_flat:
-            loss_db, _, _ = terrain_aware_loss(
-                active_bts["latitude"], active_bts["longitude"], req.bts_height,
-                s["latitude"], s["longitude"], cpe_height,
-                req.frequency_mhz, terrain_grid, req.environment
+        for c_idx, bts in enumerate(candidates_to_check):
+            actual_bts_idx = bts_candidates.index(bts) if req.bts_index == -1 else req.bts_index
+            
+            d_km = haversine_distance(bts["latitude"], bts["longitude"], s["latitude"], s["longitude"])
+            if d_km < 0.01:
+                d_km = 0.01
+
+            cpe_height = s.get("height_m") or 10.0
+
+            if req.model == "terrain_aware" and not terrain_grid.is_flat:
+                loss_db, _, _ = terrain_aware_loss(
+                    bts["latitude"], bts["longitude"], req.bts_height,
+                    s["latitude"], s["longitude"], cpe_height,
+                    req.frequency_mhz, terrain_grid, req.environment
+                )
+            else:
+                loss_db = okumura_hata(d_km, req.frequency_mhz, req.bts_height, cpe_height, req.environment)
+
+            # Sector gain — pick best-serving sector
+            pt_bearing = calc_bearing(bts["latitude"], bts["longitude"],
+                                       s["latitude"], s["longitude"])
+            best_sec_i = best_sector_for_point(
+                bts["latitude"], bts["longitude"],
+                s["latitude"], s["longitude"],
+                req.sector_azimuths, req.hpbw_deg, req.front_to_back_db
             )
-        else:
-            loss_db = okumura_hata(d_km, req.frequency_mhz, req.bts_height, cpe_height, req.environment)
+            sg_db = sector_gain(pt_bearing, req.sector_azimuths[best_sec_i],
+                                req.hpbw_deg, req.front_to_back_db)
 
-        # Sector gain — pick best-serving sector
-        pt_bearing = calc_bearing(active_bts["latitude"], active_bts["longitude"],
-                                   s["latitude"], s["longitude"])
-        best_sec = best_sector_for_point(
-            active_bts["latitude"], active_bts["longitude"],
-            s["latitude"], s["longitude"],
-            req.sector_azimuths, req.hpbw_deg, req.front_to_back_db
-        )
-        sg_db = sector_gain(pt_bearing, req.sector_azimuths[best_sec],
-                            req.hpbw_deg, req.front_to_back_db)
+            rssi = compute_rssi(loss_db, eirp, req.rx_gain_dbi, req.rx_cable_loss_db, sg_db)
+            margin = rssi - req.rx_sensitivity_dbm
 
-        rssi = compute_rssi(loss_db, eirp, req.rx_gain_dbi, req.rx_cable_loss_db, sg_db)
-        margin = rssi - req.rx_sensitivity_dbm
+            if rssi > best_rssi:
+                best_rssi = rssi
+                best_margin = margin
+                best_dist = d_km
+                best_sec = best_sec_i
+                best_sg = sg_db
+                best_bts_idx = actual_bts_idx
+                best_bts_name = bts["name"]
 
         status = "🔴 Fail (No Signal)"
-        if margin >= 10.0:
+        if best_margin >= 10.0:
             status = "🟢 Pass (Excellent)"
             covered_count += 1
-        elif margin >= 0.0:
+        elif best_margin >= 0.0:
             status = "🟡 Pass (Marginal)"
             covered_count += 1
 
         cpe_results.append({
             "name": s["name"],
-            "distance_km": round(d_km, 2),
+            "distance_km": round(best_dist, 2),
             "elevation_m": round(get_elevation(terrain_grid, s["latitude"], s["longitude"]), 1),
-            "rssi_dbm": round(rssi, 1),
-            "margin_db": round(margin, 1),
+            "rssi_dbm": round(best_rssi, 1),
+            "margin_db": round(best_margin, 1),
             "status": status,
             "latitude": s["latitude"],
             "longitude": s["longitude"],
             "best_sector": best_sec,
-            "best_sector_gain_db": round(sg_db, 1),
+            "best_sector_gain_db": round(best_sg, 1),
+            "serving_bts_index": best_bts_idx,
+            "serving_bts_name": best_bts_name,
         })
         
     total_cpes = len(cpe_sites)
@@ -565,6 +637,10 @@ def generate_report(req: GenerateReportRequest):
         "cpe_height": sim_params.cpe_height,
         "environment": sim_params.environment,
         "model": sim_params.model,
+        "sector_azimuths": sim_params.sector_azimuths,
+        "hpbw_deg": sim_params.hpbw_deg,
+        "vpbw_deg": sim_params.vpbw_deg,
+        "front_to_back_db": sim_params.front_to_back_db,
     }, sort_keys=True).encode()).hexdigest()
     
     cached = _simulation_cache.get(cache_key)

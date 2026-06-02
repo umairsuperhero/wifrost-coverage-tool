@@ -26,14 +26,16 @@ The original Streamlit app lives on `main` (v1.2.0). This branch (`v2.0-react-fr
 | Component | Role |
 |---|---|
 | `app/page.tsx` | Root page — state orchestration, API calls, layout |
-| `components/Sidebar.tsx` | File upload, simulation params, antenna sectors panel, channel BW, history tab |
+| `components/Sidebar.tsx` | File upload, simulation params, Simple/Advanced toggle (localStorage), antenna sectors panel, channel BW, history tab |
 | `components/HistoryPanel.tsx` | Simulation history list with refresh/delete/reload |
 | `components/CompassRose.tsx` | SVG compass rose with draggable sector wedges |
-| `components/MapView.tsx` + `MapInner.tsx` | Leaflet map, coverage GeoJSON, client-side scenario filter, sector wedge polygons |
+| `components/MapView.tsx` + `MapInner.tsx` | Leaflet map, coverage GeoJSON, client-side scenario filter, sector wedge polygons; CPE CircleMarkers coloured by margin_db |
 | `components/CpeTable.tsx` | CPE link analysis table with Sector column |
+| `components/CpeSummaryBar.tsx` | Three-segment Excellent/Marginal/No-Signal progress bar above CpeTable |
 | `components/TerrainChart.tsx` | Terrain elevation cross-section |
 | `components/ResultsBanner.tsx` | Simulation outcome + PDF download trigger |
 | `components/MetricsRow.tsx` | Clickable Best / Realistic / Conservative scenario cards |
+| `components/LinkBudget.tsx` | Live RF link-budget breakdown: TX→EIRP, Rx→max allowed PL, simulated max range |
 | `components/ModelInfoPanel.tsx` | Propagation theory reference panel |
 
 ## Running locally
@@ -65,6 +67,8 @@ Open **http://localhost:3001**. Backend must be on 8000 (CORS allows 3000/3001/3
 - **Flat-terrain fallback** — if OpenTopography key is absent, `terrain.py` returns `is_flat=True`; diffraction is skipped and the UI shows a notice.
 - **Channel bandwidth → Rx sensitivity** auto-computed in Sidebar: `kTB + 8 dB NF + 3 dB SNR` (6 MHz = −95 dBm, 12 MHz = −92 dBm default, 18 = −90, 24 = −89).
 - **GeoJSON uses `thresh_best`** — all cells above best-case threshold are included; frontend filters client-side by `activeThreshold` for instant scenario switching.
+- **Terrain grid caching via snapping** — bounding box coordinates are rounded to the nearest `0.05` degrees inside `build_bounding_box`, keeping bounds identical for minor drags and achieving 100% cache hits.
+- **Horizontal interval GeoJSON merging** — Groups contiguous same-colored pixels row-by-row into single polygons inside `heatmap.py` to compress payload sizes by ~70% (<200KB).
 - **SQLite history** (`db.py`) — each simulation auto-saved; MAX_HISTORY=20; full params/stats/geojson stored for PDF replay.
 
 ## API endpoints
@@ -119,5 +123,5 @@ concurrent configuration races under parallel FastAPI requests.
 
 ## Version
 
-Current branch: **v2.0-react-frontend** — v1.6.0
+Current branch: **v2.0-react-frontend** — v2.0.0
 Stable Streamlit app: **main** — v1.2.0

@@ -111,6 +111,80 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
   const [srtmKey, setSrtmKey] = useState<string>("");
   const [environment, setEnvironment] = useState<string>("suburban");
 
+  const [rfPreset, setRfPreset] = useState<string>("manual");
+  const [advancedMode, setAdvancedMode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('wifrost_advanced_mode') === 'true';
+  });
+
+  interface PresetConfig {
+    name: string;
+    frequency: number;
+    environment: string;
+    btsHeight: number;
+    cpeHeight: number;
+    cpeSensitivity: number;
+    systemMargin: number;
+    txPower: number;
+    antennaGain: number;
+    cableLoss: number;
+  }
+
+  const RF_PRESETS: Record<string, PresetConfig> = {
+    dense_urban: {
+      name: "Dense Urban",
+      frequency: 600.0,
+      environment: "urban",
+      btsHeight: 30.0,
+      cpeHeight: 10.0,
+      cpeSensitivity: -98.0,
+      systemMargin: 20.0,
+      txPower: 23.0,
+      antennaGain: 13.0,
+      cableLoss: 0.0
+    },
+    rural_hills: {
+      name: "Rural Hills",
+      frequency: 500.0,
+      environment: "vegetation_dense",
+      btsHeight: 45.0,
+      cpeHeight: 12.0,
+      cpeSensitivity: -104.0,
+      systemMargin: 12.0,
+      txPower: 23.0,
+      antennaGain: 13.0,
+      cableLoss: 0.0
+    },
+    coastal_flat: {
+      name: "Coastal Flat",
+      frequency: 600.0,
+      environment: "open_water",
+      btsHeight: 20.0,
+      cpeHeight: 8.0,
+      cpeSensitivity: -104.0,
+      systemMargin: 8.0,
+      txPower: 23.0,
+      antennaGain: 13.0,
+      cableLoss: 0.0
+    }
+  };
+
+  const applyRfPreset = (presetKey: string) => {
+    setRfPreset(presetKey);
+    if (presetKey === "manual") return;
+    const p = RF_PRESETS[presetKey];
+    if (!p) return;
+    setFrequencyMhz(p.frequency);
+    setEnvironment(p.environment);
+    setBtsHeight(p.btsHeight);
+    setCpeHeight(p.cpeHeight);
+    setCpeSensitivity(p.cpeSensitivity);
+    setSystemMarginDb(p.systemMargin);
+    setTxPowerDbm(p.txPower);
+    setAntennaGainDbi(p.antennaGain);
+    setCableLossDb(p.cableLoss);
+  };
+
   // Sector antenna state
   const [sectorCount, setSectorCount] = useState<1 | 2 | 3>(1);
   const [sectorAzimuths, setSectorAzimuths] = useState<number[]>([0]);
@@ -344,6 +418,24 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
         </h2>
 
         <div className="space-y-4">
+          {/* RF Parameter Preset */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+              RF Parameter Preset
+              <Tooltip content="Quick presets to pre-fill standard deployment environments, or choose Manual to custom tune parameters." />
+            </label>
+            <select
+              value={rfPreset}
+              onChange={(e) => applyRfPreset(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-950/60 border border-slate-855 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="manual">Manual (Custom)</option>
+              <option value="dense_urban">Dense Urban (600MHz, 36dBm, Urban)</option>
+              <option value="rural_hills">Rural Hills (500MHz, 36dBm, Dense Veg)</option>
+              <option value="coastal_flat">Coastal Flat (600MHz, 36dBm, Open Water)</option>
+            </select>
+          </div>
+
           {/* Active BTS site */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-400 uppercase">Active BTS Site</label>
@@ -356,67 +448,91 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
               {btsCandidates.length === 0 ? (
                 <option value={0}>No BTS candidates found</option>
               ) : (
-                btsCandidates.map((site, index) => (
-                  <option key={index} value={index}>
-                    {site.name}
-                  </option>
-                ))
+                <>
+                  <option value={-1}>All Towers (Consolidated)</option>
+                  {btsCandidates.map((site, index) => (
+                    <option key={index} value={index}>
+                      {site.name}
+                    </option>
+                  ))}
+                </>
               )}
             </select>
           </div>
 
-          {/* Model Type */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
-              Propagation Model
-              <Tooltip content="Terrain-Aware: Okumura-Hata propagation calculated over real elevation data from SRTM. Flat Hata: Standard Hata formula assuming a flat plain." />
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setModelType("terrain_aware")}
-                className={`py-2 text-xs font-medium rounded-lg border transition ${
-                  modelType === "terrain_aware"
-                    ? "bg-blue-600/10 border-blue-500 text-blue-400 font-semibold"
-                    : "bg-slate-950/40 border-slate-850 text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                Terrain-Aware
-              </button>
-              <button
-                type="button"
-                onClick={() => setModelType("flat")}
-                className={`py-2 text-xs font-medium rounded-lg border transition ${
-                  modelType === "flat"
-                    ? "bg-blue-600/10 border-blue-500 text-blue-400 font-semibold"
-                    : "bg-slate-950/40 border-slate-850 text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                Flat Hata
-              </button>
-            </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                const next = !advancedMode;
+                setAdvancedMode(next);
+                localStorage.setItem('wifrost_advanced_mode', String(next));
+              }}
+              className="text-xs text-blue-400 hover:text-blue-300 font-medium"
+            >
+              {advancedMode ? "Advanced ▴" : "Advanced ▾"}
+            </button>
           </div>
 
+          {/* Model Type */}
+          {advancedMode && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+                Propagation Model
+                <Tooltip content="Terrain-Aware: Okumura-Hata propagation calculated over real elevation data from SRTM. Flat Hata: Standard Hata formula assuming a flat plain." />
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setModelType("terrain_aware")}
+                  className={`py-2 text-xs font-medium rounded-lg border transition ${
+                    modelType === "terrain_aware"
+                      ? "bg-blue-600/10 border-blue-500 text-blue-400 font-semibold"
+                      : "bg-slate-950/40 border-slate-850 text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  Terrain-Aware
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModelType("flat")}
+                  className={`py-2 text-xs font-medium rounded-lg border transition ${
+                    modelType === "flat"
+                      ? "bg-blue-600/10 border-blue-500 text-blue-400 font-semibold"
+                      : "bg-slate-950/40 border-slate-850 text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  Flat Hata
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Clutter Environment */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
-              Clutter Environment
-              <Tooltip content="Clutter introduces clutter loss: Open (3 dB), Open Water (0 dB), Suburban (8 dB), Light Vegetation (6 dB), Dense Vegetation (15 dB), Port/Industrial (12 dB), Urban (18 dB)." />
-            </label>
-            <select
-              value={environment}
-              onChange={(e) => setEnvironment(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
-            >
-              <option value="open">Open / Rural Flat</option>
-              <option value="open_water">Open Water / Sea</option>
-              <option value="suburban">Suburban / Trees & Houses</option>
-              <option value="vegetation_light">Light Vegetation / Forest Edge</option>
-              <option value="vegetation_dense">Dense Vegetation / Deep Jungle</option>
-              <option value="port_industrial">Port / Industrial</option>
-              <option value="urban">Urban / Tall Structures</option>
-            </select>
-          </div>
+          {advancedMode && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+                Clutter Environment
+                <Tooltip content="Clutter introduces clutter loss: Open (3 dB), Open Water (0 dB), Suburban (8 dB), Light Vegetation (6 dB), Dense Vegetation (15 dB), Port/Industrial (12 dB), Urban (18 dB)." />
+              </label>
+              <select
+                value={environment}
+                onChange={(e) => {
+                  setEnvironment(e.target.value);
+                  setRfPreset("manual");
+                }}
+                className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
+              >
+                <option value="open">Open / Rural Flat</option>
+                <option value="open_water">Open Water / Sea</option>
+                <option value="suburban">Suburban / Trees & Houses</option>
+                <option value="vegetation_light">Light Vegetation / Forest Edge</option>
+                <option value="vegetation_dense">Dense Vegetation / Deep Jungle</option>
+                <option value="port_industrial">Port / Industrial</option>
+                <option value="urban">Urban / Tall Structures</option>
+              </select>
+            </div>
+          )}
 
           {/* Frequency & Heights */}
           <div className="grid grid-cols-2 gap-4">
@@ -428,7 +544,10 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
               <input
                 type="number"
                 value={frequencyMhz}
-                onChange={(e) => setFrequencyMhz(Number(e.target.value))}
+                onChange={(e) => {
+                  setFrequencyMhz(Number(e.target.value));
+                  setRfPreset("manual");
+                }}
                 min={470}
                 max={670}
                 className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
@@ -442,53 +561,67 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
               <input
                 type="number"
                 value={btsHeight}
-                onChange={(e) => setBtsHeight(Number(e.target.value))}
+                onChange={(e) => {
+                  setBtsHeight(Number(e.target.value));
+                  setRfPreset("manual");
+                }}
                 className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
               />
             </div>
           </div>
 
           {/* Transmitter Power specs */}
-          <details className="group border border-slate-850 rounded-lg bg-slate-950/20 overflow-hidden">
-            <summary className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase cursor-pointer flex justify-between items-center hover:bg-slate-950/40 transition">
-              <span>BTS Equipment Config</span>
-              <Settings className="w-3.5 h-3.5 text-slate-500 group-open:rotate-90 transition duration-300" />
-            </summary>
-            <div className="p-3 border-t border-slate-850 space-y-3 bg-slate-950/10">
-              <div className="grid grid-cols-3 gap-2">
-                <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 uppercase">Power (dBm)</label>
-                  <input
-                    type="number"
-                    value={txPowerDbm}
-                    onChange={(e) => setTxPowerDbm(Number(e.target.value))}
-                    className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
-                  />
+          {advancedMode && (
+            <details className="group border border-slate-850 rounded-lg bg-slate-950/20 overflow-hidden">
+              <summary className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase cursor-pointer flex justify-between items-center hover:bg-slate-950/40 transition">
+                <span>BTS Equipment Config</span>
+                <Settings className="w-3.5 h-3.5 text-slate-500 group-open:rotate-90 transition duration-300" />
+              </summary>
+              <div className="p-3 border-t border-slate-850 space-y-3 bg-slate-950/10">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 uppercase">Power (dBm)</label>
+                    <input
+                      type="number"
+                      value={txPowerDbm}
+                      onChange={(e) => {
+                        setTxPowerDbm(Number(e.target.value));
+                        setRfPreset("manual");
+                      }}
+                      className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 uppercase">Gain (dBi)</label>
+                    <input
+                      type="number"
+                      value={antennaGainDbi}
+                      onChange={(e) => {
+                        setAntennaGainDbi(Number(e.target.value));
+                        setRfPreset("manual");
+                      }}
+                      className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 uppercase">Loss (dB)</label>
+                    <input
+                      type="number"
+                      value={cableLossDb}
+                      onChange={(e) => {
+                        setCableLossDb(Number(e.target.value));
+                        setRfPreset("manual");
+                      }}
+                      className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 uppercase">Gain (dBi)</label>
-                  <input
-                    type="number"
-                    value={antennaGainDbi}
-                    onChange={(e) => setAntennaGainDbi(Number(e.target.value))}
-                    className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 uppercase">Loss (dB)</label>
-                  <input
-                    type="number"
-                    value={cableLossDb}
-                    onChange={(e) => setCableLossDb(Number(e.target.value))}
-                    className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
-                  />
+                <div className="text-[10px] text-slate-400 text-right">
+                  Calculated EIRP: <span className="text-blue-400 font-bold">{eirpDbm.toFixed(1)} dBm</span>
                 </div>
               </div>
-              <div className="text-[10px] text-slate-400 text-right">
-                Calculated EIRP: <span className="text-blue-400 font-bold">{eirpDbm.toFixed(1)} dBm</span>
-              </div>
-            </div>
-          </details>
+            </details>
+          )}
 
           {/* ── ANTENNA SECTORS ─────────────────────────────── */}
           <div className="border border-slate-700 rounded-lg bg-slate-950/20 overflow-hidden">
@@ -597,93 +730,122 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           </div>
 
           {/* CPE specs */}
-          <details className="group border border-slate-850 rounded-lg bg-slate-950/20 overflow-hidden">
-            <summary className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase cursor-pointer flex justify-between items-center hover:bg-slate-950/40 transition">
-              <span>CPE client Config</span>
-              <Settings className="w-3.5 h-3.5 text-slate-500 group-open:rotate-90 transition duration-300" />
-            </summary>
-            <div className="p-3 border-t border-slate-850 space-y-3 bg-slate-950/10">
-              {/* Channel bandwidth → auto-computes Rx sensitivity */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] text-slate-500 uppercase">Channel Bandwidth</label>
-                <div className="grid grid-cols-4 gap-1">
-                  {[6, 12, 18, 24].map((bw) => (
-                    <button
-                      key={bw}
-                      type="button"
-                      onClick={() => setChannelBwMhz(bw)}
-                      className={`py-1 text-[10px] font-semibold rounded border transition ${
-                        channelBwMhz === bw
-                          ? "bg-blue-600/20 border-blue-500 text-blue-300"
-                          : "bg-slate-950/40 border-slate-800 text-slate-400 hover:text-slate-200"
-                      }`}
-                    >
-                      {bw} MHz
-                    </button>
-                  ))}
+          {advancedMode && (
+            <details className="group border border-slate-850 rounded-lg bg-slate-950/20 overflow-hidden">
+              <summary className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase cursor-pointer flex justify-between items-center hover:bg-slate-950/40 transition">
+                <span>CPE client Config</span>
+                <Settings className="w-3.5 h-3.5 text-slate-500 group-open:rotate-90 transition duration-300" />
+              </summary>
+              <div className="p-3 border-t border-slate-850 space-y-3 bg-slate-950/10">
+                {/* Channel bandwidth → auto-computes Rx sensitivity */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-500 uppercase">Channel Bandwidth</label>
+                  <div className="grid grid-cols-4 gap-1">
+                    {[6, 12, 18, 24].map((bw) => (
+                      <button
+                        key={bw}
+                        type="button"
+                        onClick={() => {
+                          setChannelBwMhz(bw);
+                          setRfPreset("manual");
+                        }}
+                        className={`py-1 text-[10px] font-semibold rounded border transition ${
+                          channelBwMhz === bw
+                            ? "bg-blue-600/20 border-blue-500 text-blue-300"
+                            : "bg-slate-950/40 border-slate-800 text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        {bw} MHz
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[9px] text-slate-600">
+                    Sensitivity: {cpeSensitivity} dBm · kTB + 8 dB NF + 3 dB SNR
+                  </p>
                 </div>
-                <p className="text-[9px] text-slate-600">
-                  Sensitivity: {cpeSensitivity} dBm · kTB + 8 dB NF + 3 dB SNR
-                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 uppercase">CPE Height (m)</label>
+                    <input
+                      type="number"
+                      value={cpeHeight}
+                      onChange={(e) => {
+                        setCpeHeight(Number(e.target.value));
+                        setRfPreset("manual");
+                      }}
+                      className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 uppercase">Rx Sensitivity (dBm)</label>
+                    <input
+                      type="number"
+                      value={cpeSensitivity}
+                      onChange={(e) => {
+                        setCpeSensitivity(Number(e.target.value));
+                        setRfPreset("manual");
+                      }}
+                      className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 uppercase">Ant. Gain (dBi)</label>
+                    <input
+                      type="number"
+                      value={cpeGainDbi}
+                      onChange={(e) => {
+                        setCpeGainDbi(Number(e.target.value));
+                        setRfPreset("manual");
+                      }}
+                      className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 uppercase">Cable Loss (dB)</label>
+                    <input
+                      type="number"
+                      value={cpeCableLossDb}
+                      onChange={(e) => {
+                        setCpeCableLossDb(Number(e.target.value));
+                        setRfPreset("manual");
+                      }}
+                      className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 uppercase">CPE Height (m)</label>
-                  <input
-                    type="number"
-                    value={cpeHeight}
-                    onChange={(e) => setCpeHeight(Number(e.target.value))}
-                    className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 uppercase">Rx Sensitivity (dBm)</label>
-                  <input
-                    type="number"
-                    value={cpeSensitivity}
-                    onChange={(e) => setCpeSensitivity(Number(e.target.value))}
-                    className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 uppercase">Ant. Gain (dBi)</label>
-                  <input
-                    type="number"
-                    value={cpeGainDbi}
-                    onChange={(e) => setCpeGainDbi(Number(e.target.value))}
-                    className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 uppercase">Cable Loss (dB)</label>
-                  <input
-                    type="number"
-                    value={cpeCableLossDb}
-                    onChange={(e) => setCpeCableLossDb(Number(e.target.value))}
-                    className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
-                  />
-                </div>
-              </div>
-            </div>
-          </details>
+            </details>
+          )}
 
-          {/* System Margin */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
-                System Margin (dB)
-                <Tooltip content="Fading and reliability safety margin in dB. Higher values require stronger signal thresholds to declare coverage (Conservative vs Realistic)." />
-              </label>
-              <input
-                type="number"
-                value={systemMarginDb}
-                onChange={(e) => setSystemMarginDb(Number(e.target.value))}
-                min={0}
-                className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
-              />
-            </div>
+          {/* System Margin — always visible */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+              System Margin (dB)
+              <Tooltip content="Fading and reliability safety margin in dB. Higher values require stronger signal thresholds to declare coverage (Conservative vs Realistic)." />
+            </label>
+            <input
+              type="number"
+              value={systemMarginDb}
+              onChange={(e) => {
+                setSystemMarginDb(Number(e.target.value));
+                setRfPreset("manual");
+              }}
+              min={0}
+              className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          {/* Simple-mode summary */}
+          {!advancedMode && (
+            <p className="text-xs text-slate-500 truncate">
+              Model: {modelType} · {environment} · Gain {antennaGainDbi} dBi · Margin {systemMarginDb} dB
+            </p>
+          )}
+
+          {/* Coverage Probability — advanced only */}
+          {advancedMode && (
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
                 Coverage Prob.
@@ -701,22 +863,24 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                 <option value="99%">99% (Pessimistic)</option>
               </select>
             </div>
-          </div>
+          )}
 
           {/* OpenTopography Key */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
-              OpenTopography Key
-              <Tooltip content="Your personal OpenTopography key to query terrain elevations. Leave empty to use the server's shared key." />
-            </label>
-            <input
-              type="password"
-              placeholder="Uses server defaults if blank"
-              value={srtmKey}
-              onChange={(e) => setSrtmKey(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
-            />
-          </div>
+          {advancedMode && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+                OpenTopography Key
+                <Tooltip content="Your personal OpenTopography key to query terrain elevations. Leave empty to use the server's shared key." />
+              </label>
+              <input
+                type="password"
+                placeholder="Uses server defaults if blank"
+                value={srtmKey}
+                onChange={(e) => setSrtmKey(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+          )}
         </div>
       </div>
 

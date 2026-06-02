@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: wifrost-backend
+    env: docker
+    dockerfilePath: Dockerfile
+    dockerContext: .
+    plan: starter
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENTOPOGRAPHY_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false # Comma-separated list of frontends allowed to query, e.g. https://your-app.vercel.app
+    disk:
+      name: wifrost-data
+      mountPath: /app/data
+      sizeGB: 1

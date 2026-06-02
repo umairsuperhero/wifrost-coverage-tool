@@ -322,7 +322,65 @@ def compute_coverage_grid(bts_site: Any, equipment_bts: Any, equipment_cpe: Any,
                         model=model, frequency_mhz=f_mhz)
 
 
+def merge_coverage_grids(grids: List[CoverageGrid], resolution_m: float = 100.0) -> CoverageGrid:
+    """Consolidate multiple individual CoverageGrid instances into a single merged grid by taking the max RSSI."""
+    if not grids:
+        raise ValueError("No coverage grids to merge.")
+    
+    shape = grids[0].rssi_array.shape
+    for g in grids:
+        if g.rssi_array.shape != shape:
+            raise ValueError("All grids must have the identical shape to be merged.")
+            
+    merged_rssi = np.full(shape, -999.0)
+    for g in grids:
+        merged_rssi = np.maximum(merged_rssi, g.rssi_array)
+        
+    nrows, ncols = shape
+    total_cells = nrows * ncols
+    covered_cells = int(np.sum(merged_rssi >= -85.0))
+    good_cells = int(np.sum(merged_rssi >= -75.0))
+    excellent_cells = int(np.sum(merged_rssi >= -65.0))
+
+    coverage_pct = (covered_cells / total_cells * 100.0) if total_cells > 0 else 0.0
+    good_pct = (good_cells / total_cells * 100.0) if total_cells > 0 else 0.0
+    excellent_pct = (excellent_cells / total_cells * 100.0) if total_cells > 0 else 0.0
+
+    covered_rssis = merged_rssi[merged_rssi >= -85.0]
+    avg_rssi = float(np.mean(covered_rssis)) if len(covered_rssis) > 0 else -110.0
+    max_range_km = float(max(g.stats["max_range_km"] for g in grids))
+
+    stats = {
+        "coverage_pct": round(coverage_pct, 1),
+        "good_pct": round(good_pct, 1),
+        "excellent_pct": round(excellent_pct, 1),
+        "avg_rssi": round(avg_rssi, 1),
+        "max_range_km": round(max_range_km, 2),
+        "total_area_km2": round((nrows * ncols * resolution_m ** 2) / 1e6, 2),
+    }
+
+    class DummyBTS:
+        name = "All Towers (Consolidated)"
+        latitude = float(np.mean([g.bts_site.latitude for g in grids])) if hasattr(grids[0].bts_site, 'latitude') else 0.0
+        longitude = float(np.mean([g.bts_site.longitude for g in grids])) if hasattr(grids[0].bts_site, 'longitude') else 0.0
+        height_m = float(np.mean([g.bts_site.height_m for g in grids])) if hasattr(grids[0].bts_site, 'height_m') else 30.0
+        is_bts_candidate = True
+        site_type = "BTS"
+
+    return CoverageGrid(
+        rssi_array=merged_rssi,
+        lats=grids[0].lats,
+        lons=grids[0].lons,
+        stats=stats,
+        bts_site=DummyBTS(),
+        resolution_m=resolution_m,
+        model=grids[0].model,
+        frequency_mhz=grids[0].frequency_mhz
+    )
+
+
 # ── CPE point-by-point analysis ───────────────────────────────────────────────
+
 
 def compute_cpe_analysis(bts_site: Any, cpe_sites: List[Any],
                           equipment_bts: Any, equipment_cpe: Any,
@@ -464,24 +522,46 @@ def coverage_to_geojson(coverage_grid: CoverageGrid,
     d_lon = abs(lons[1] - lons[0]) if n_lons > 1 else 0.001
 
     for r in range(n_lats):
-        lat = lats[r]
-        for c in range(n_lons):
+        c = 0
+        while c < n_lons:
             rssi = rssi_array[r, c]
             if rssi < threshold_dbm:
+                c += 1
                 continue
             color = get_rssi_color(rssi)
             if not color:
+                c += 1
                 continue
-            west = lons[c] - d_lon / 2.0
-            east = lons[c] + d_lon / 2.0
+            
+            # Start of a contiguous run of cells with the same color
+            c_start = c
+            c += 1
+            while c < n_lons:
+                next_rssi = rssi_array[r, c]
+                if next_rssi < threshold_dbm:
+                    break
+                next_color = get_rssi_color(next_rssi)
+                if next_color != color:
+                    break
+                c += 1
+            c_end = c - 1
+            
+            # Create a single merged horizontal rectangle polygon
+            west = lons[c_start] - d_lon / 2.0
+            east = lons[c_end] + d_lon / 2.0
             south = lats[r] - d_lat / 2.0
             north = lats[r] + d_lat / 2.0
+            
             coords = [[[west, south], [east, south], [east, north],
                         [west, north], [west, south]]]
+            
+            # Use mean RSSI of the merged run for properties
+            avg_rssi = float(np.mean(rssi_array[r, c_start:c_end + 1]))
+            
             features.append({
                 "type": "Feature",
                 "properties": {
-                    "rssi": round(rssi, 1),
+                    "rssi": round(avg_rssi, 1),
                     "fill": color,
                     "fill-opacity": 0.4,
                     "stroke": False,

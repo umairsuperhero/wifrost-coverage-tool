@@ -27,6 +27,16 @@ interface MapViewProps {
   sectorInfo?: { azimuths: number[]; hpbw: number; radiusKm: number } | null;
   activeScenario?: "best" | "realistic" | "conservative";
   activeThreshold?: number;
+  onMoveBts?: (index: number, lat: number, lng: number) => void;
+  mapMode?: "normal" | "measure";
+  setMapMode?: (mode: "normal" | "measure") => void;
+  hoverPoint?: [number, number] | null;
+  opacity?: number;
+  setOpacity?: (opacity: number) => void;
+  mapTheme?: "dark" | "satellite" | "street";
+  setMapTheme?: (theme: "dark" | "satellite" | "street") => void;
+  measurePoints?: [number, number][];
+  setMeasurePoints?: (points: [number, number][]) => void;
 }
 
 export default function MapView(props: MapViewProps) {
