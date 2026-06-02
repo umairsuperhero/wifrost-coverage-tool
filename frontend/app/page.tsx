@@ -16,6 +16,20 @@ import CpeSummaryBar from "../components/CpeSummaryBar";
 import { Compass, HelpCircle, AlertCircle, Signal, CheckCircle, AlertTriangle } from "lucide-react";
 import axios from "axios";
 
+// One automatic retry on network/5xx errors — handles Render free-tier cold-start 503
+async function axiosWithRetry(fn: () => Promise<any>, delayMs = 4000): Promise<any> {
+  try {
+    return await fn();
+  } catch (err: any) {
+    const status = err?.response?.status;
+    if (!status || status === 503 || status === 502) {
+      await new Promise((r) => setTimeout(r, delayMs));
+      return await fn();
+    }
+    throw err;
+  }
+}
+
 export interface Site {
   name: string;
   latitude: number;
@@ -217,8 +231,8 @@ export default function Home() {
     const sitesToUse = overrideSites || parsedData.sites;
     const slowTimer = setTimeout(() => setSlowStart(true), 8000);
     try {
-      // 1. Run simulation
-      const simRes = await axios.post(`${API_BASE}/api/simulate`, {
+      // 1. Run simulation (retry once on cold-start 503/network error)
+      const simRes = await axiosWithRetry(() => axios.post(`${API_BASE}/api/simulate`, {
         site_index: params.site_index,
         frequency_mhz: params.frequency_mhz,
         eirp_dbm: params.eirp_dbm,
@@ -237,7 +251,7 @@ export default function Home() {
         hpbw_deg: params.hpbw_deg,
         vpbw_deg: params.vpbw_deg,
         front_to_back_db: params.front_to_back_db,
-      });
+      }));
 
       // Save active simulation parameters for report generation
       const simulationParamsContext = {
@@ -265,7 +279,7 @@ export default function Home() {
       setSimulationResults(simRes.data);
       setSelectedBtsIndex(params.site_index);
 
-      // 2. Run CPE Link Margin Analysis
+      // 2. Run CPE Link Margin Analysis (no retry needed — server already warm from step 1)
       const cpeRes = await axios.post(`${API_BASE}/api/cpe-analysis`, {
         bts_index: params.site_index,
         sites: sitesToUse,
