@@ -368,6 +368,12 @@ def simulate(req: SimulateRequest):
         "active_bts": active_bts,
     }
 
+    # BUMP USAGE COUNTER (never trimmed — true cumulative run count)
+    try:
+        db.bump_usage(BASE_DIR)
+    except Exception:
+        pass
+
     # PERSIST TO SQLITE HISTORY
     history_id = None
     try:
@@ -753,6 +759,19 @@ def terrain_profile(req: TerrainProfileRequest):
         "bts_total_height": round(H_tx, 1),
         "cpe_total_height": round(H_rx, 1)
     }
+
+@app.get("/api/stats")
+def get_stats():
+    """Aggregate usage stats: total runs, recent windows, and a 30-day series.
+
+    Backed by the never-trimmed usage_stats table, so the total is a true
+    cumulative count (unlike /api/history which is capped at the most recent runs).
+    Note: on an ephemeral filesystem (e.g. Render free tier) this resets on redeploy.
+    """
+    try:
+        return db.get_usage(BASE_DIR)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve stats: {str(e)}")
 
 @app.get("/api/history")
 def get_history(limit: int = 10):

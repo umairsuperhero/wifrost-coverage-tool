@@ -57,7 +57,60 @@ def init_db(base_dir: str) -> None:
                 geojson      TEXT
             )
         """)
+        # Lightweight usage counter — NEVER trimmed, so it survives the
+        # MAX_HISTORY cap on simulation_runs. One row per UTC day.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS usage_stats (
+                day  TEXT PRIMARY KEY,
+                runs INTEGER NOT NULL DEFAULT 0
+            )
+        """)
         conn.commit()
+    finally:
+        conn.close()
+
+
+def bump_usage(base_dir: str) -> None:
+    """Increment today's run counter. Never trimmed — survives history trim."""
+    init_db(base_dir)
+    day = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    conn = _get_conn(base_dir)
+    try:
+        conn.execute(
+            """INSERT INTO usage_stats (day, runs) VALUES (?, 1)
+               ON CONFLICT(day) DO UPDATE SET runs = runs + 1""",
+            (day,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_usage(base_dir: str) -> Dict[str, Any]:
+    """Return aggregate usage stats: total runs, recent windows, daily series."""
+    init_db(base_dir)
+    now = datetime.datetime.utcnow()
+    today = now.strftime("%Y-%m-%d")
+    d7 = (now - datetime.timedelta(days=6)).strftime("%Y-%m-%d")
+    d30 = (now - datetime.timedelta(days=29)).strftime("%Y-%m-%d")
+    conn = _get_conn(base_dir)
+    try:
+        def _sum(where: str = "", args: tuple = ()) -> int:
+            q = "SELECT COALESCE(SUM(runs), 0) AS n FROM usage_stats " + where
+            return conn.execute(q, args).fetchone()["n"]
+
+        first = conn.execute("SELECT MIN(day) AS d FROM usage_stats").fetchone()["d"]
+        daily = conn.execute(
+            "SELECT day, runs FROM usage_stats ORDER BY day DESC LIMIT 30"
+        ).fetchall()
+        return {
+            "total_runs": _sum(),
+            "runs_today": _sum("WHERE day = ?", (today,)),
+            "runs_7d": _sum("WHERE day >= ?", (d7,)),
+            "runs_30d": _sum("WHERE day >= ?", (d30,)),
+            "tracking_since": first,
+            "daily": [dict(r) for r in daily],
+        }
     finally:
         conn.close()
 
