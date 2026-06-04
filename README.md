@@ -131,6 +131,26 @@ docker compose up --build
 
 ---
 
+## Live Deployment
+
+The tool runs entirely on free-tier cloud infrastructure:
+
+| Tier | Platform | URL |
+|------|----------|-----|
+| Frontend (Next.js) | **Vercel** | <https://wifrost-coverage-tool.vercel.app> |
+| Backend (FastAPI) | **Google Cloud Run** (`wifrost-api`, `northamerica-south1`) | <https://wifrost-api-508425876629.northamerica-south1.run.app> |
+
+The backend scales to zero when idle (no fixed cost) and cold-starts in well under a
+second. The frontend's backend URL is baked in at build time via the committed
+`frontend/.env.production` and `frontend/vercel.json`. See **[DEPLOYMENT.md](DEPLOYMENT.md)**
+for full reproduction steps and environment-variable reference.
+
+> Cloud Run's filesystem is ephemeral, so the SQLite simulation history and the
+> `/api/stats` usage counter reset on cold start / redeploy. Use Vercel Analytics
+> for durable usage metrics.
+
+---
+
 ## Input File Formats
 
 ### KMZ / KML
@@ -180,6 +200,7 @@ The FastAPI backend exposes these endpoints:
 | `GET`  | `/api/history/{run_id}` | Get a historical run |
 | `DELETE` | `/api/history/{run_id}` | Delete a historical run |
 | `POST` | `/api/history/{run_id}/pdf` | Download PDF report for a run |
+| `GET`  | `/api/stats` | Cumulative usage stats (total runs + 30-day series) |
 
 Interactive docs at [http://localhost:8000/docs](http://localhost:8000/docs).
 

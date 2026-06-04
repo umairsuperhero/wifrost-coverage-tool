@@ -842,7 +842,8 @@ def get_stats():
 
     Backed by the never-trimmed usage_stats table, so the total is a true
     cumulative count (unlike /api/history which is capped at the most recent runs).
-    Note: on an ephemeral filesystem (e.g. Render free tier) this resets on redeploy.
+    Note: on an ephemeral container filesystem (e.g. Cloud Run) this resets on
+    cold start / redeploy. For durable analytics use Vercel Analytics on the frontend.
     """
     try:
         return db.get_usage(BASE_DIR)

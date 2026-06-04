@@ -3,7 +3,7 @@
 **Project:** WiFrost TVWS Coverage Tool  
 **Date:** 2026-06-01  
 **Scope:** 4 focused UI/UX and functional improvements for Fixed Wireless Access (FWA) use cases  
-**Constraints:** Zero new backend HTTP calls. All features reuse single simulation-run data. Free-tier safe (Vercel + Render).
+**Constraints:** Zero new backend HTTP calls. All features reuse single simulation-run data. Free-tier safe (Vercel + Google Cloud Run).
 
 ---
 
@@ -12,8 +12,8 @@
 | Layer | Tech |
 |-------|------|
 | Frontend | Next.js 15, React 19, Tailwind CSS 4, Leaflet (react-leaflet) |
-| Backend | FastAPI, Python 3.11 (Render free tier — 512 MB RAM, 0.1 CPU, sleeps after 15 min idle) |
-| Deployment | Vercel (frontend), Render (backend API at `https://wifrost-api.onrender.com`) |
+| Backend | FastAPI, Python 3.11 (Google Cloud Run — scales to zero, sub-second cold start, ephemeral in-memory filesystem) |
+| Deployment | Vercel (frontend), Google Cloud Run (backend API at `https://wifrost-api-508425876629.northamerica-south1.run.app`) |
 
 ### Key files
 
@@ -269,7 +269,7 @@ const pct       = total > 0 ? Math.round((excellent / total) * 100) : 0;
 
 ## Feature 4 — Cold-Start Loading UX
 
-**Goal:** Render free tier sleeps after 15 min idle. First request takes 30–50 s. Users currently see a spinner with no explanation. Show a friendly, informative message.
+**Goal:** The backend scales to zero when idle, so the first request after a quiet period incurs a cold start. Users currently see a spinner with no explanation. Show a friendly, informative message. (Originally written for the Render free tier's 30–50 s cold start; the tool now runs on Cloud Run with a sub-second cold start, but the graceful-wait UX is retained as a safety net for slow networks and the OpenTopography fetch.)
 
 ### State to add in page.tsx
 

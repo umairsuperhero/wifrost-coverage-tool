@@ -1,11 +1,11 @@
 steps:
   # Build the container image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/wifrost-backend:$COMMIT_SHA', '.']
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/wifrost-api:$COMMIT_SHA', '.']
 
   # Push the container image to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/wifrost-backend:$COMMIT_SHA']
+    args: ['push', 'gcr.io/$PROJECT_ID/wifrost-api:$COMMIT_SHA']
 
   # Deploy container image to Google Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -13,14 +13,14 @@ steps:
     args:
       - 'run'
       - 'deploy'
-      - 'wifrost-backend'
+      - 'wifrost-api'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/wifrost-backend:$COMMIT_SHA'
+      - 'gcr.io/$PROJECT_ID/wifrost-api:$COMMIT_SHA'
       - '--region'
-      - 'us-central1'
+      - 'northamerica-south1'
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
 
 images:
-  - 'gcr.io/$PROJECT_ID/wifrost-backend:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/wifrost-api:$COMMIT_SHA'

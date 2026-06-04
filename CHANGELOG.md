@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.1.1] — 2026-06-04
+
+### Changed
+- **Backend migrated from Render to Google Cloud Run.** The API now runs as the
+  `wifrost-api` service in `northamerica-south1` at
+  `https://wifrost-api-508425876629.northamerica-south1.run.app`. Cloud Run scales to
+  zero (no fixed cost) with a sub-second cold start, replacing Render's free-tier
+  15-minute idle spin-down and the external UptimeRobot keep-alive workaround.
+- **Frontend repointed at the Cloud Run backend** via committed
+  `frontend/.env.production` and `frontend/vercel.json` (`NEXT_PUBLIC_API_URL` is
+  baked into the client bundle at build time).
+- `cloudbuild.yaml` updated to deploy `wifrost-api` in `northamerica-south1`.
+- `DEPLOYMENT.md` rewritten to document the real production topology (Vercel +
+  Cloud Run) and environment-variable / CORS reference; the previous Firebase
+  Hosting instructions were stale.
+- Code comments and the enhancement spec updated to reference Cloud Run instead of
+  Render's free tier.
+
+### Added
+- **`GET /api/stats`** — cumulative usage tracking (total runs, 7/30-day windows,
+  and a 30-day daily series), backed by a never-trimmed `usage_stats` SQLite table.
+  Each `/api/simulate` call increments the counter. Note: the counter lives on
+  Cloud Run's ephemeral filesystem and resets on cold start / redeploy — use Vercel
+  Analytics for durable metrics.
+
+### Removed
+- `render.yaml` — Render is no longer used.
+
 ## [2.1.0] — 2026-06-01
 
 ### Added

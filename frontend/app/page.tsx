@@ -16,7 +16,7 @@ import CpeSummaryBar from "../components/CpeSummaryBar";
 import { Compass, HelpCircle, AlertCircle, Signal, CheckCircle, AlertTriangle } from "lucide-react";
 import axios from "axios";
 
-// One automatic retry on network/5xx errors — handles Render free-tier cold-start 503
+// One automatic retry on network/5xx errors — handles Cloud Run cold-start 503 (scales to zero)
 async function axiosWithRetry(fn: () => Promise<any>, delayMs = 4000): Promise<any> {
   try {
     return await fn();
