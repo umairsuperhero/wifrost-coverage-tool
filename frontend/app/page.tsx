@@ -13,6 +13,7 @@ import TerrainChart from "../components/TerrainChart";
 import ModelInfoPanel from "../components/ModelInfoPanel";
 import LinkBudget from "../components/LinkBudget";
 import CpeSummaryBar from "../components/CpeSummaryBar";
+import RunSummaryBar from "../components/RunSummaryBar";
 import { Compass, HelpCircle, AlertCircle, Signal, CheckCircle, AlertTriangle } from "lucide-react";
 import axios from "axios";
 
@@ -143,6 +144,11 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isProfileLoading, setIsProfileLoading] = useState<boolean>(false);
   const [slowStart, setSlowStart] = useState(false);
+
+  // Run tracking — lets the user see WHAT was run and WHEN it last re-ran.
+  const [runCount, setRunCount] = useState<number>(0);
+  const [lastRunAt, setLastRunAt] = useState<Date | null>(null);
+  const [prevCoverage, setPrevCoverage] = useState<number | null>(null);
 
   // Live sector state — updated immediately when user adjusts compass rose (no re-sim needed)
   const [liveSector, setLiveSector] = useState<{ azimuths: number[]; hpbw: number }>({ azimuths: [0], hpbw: 65 });
@@ -278,6 +284,28 @@ export default function Home() {
       setActiveSimulationParams(simulationParamsContext);
       setSimulationResults(simRes.data);
       setSelectedBtsIndex(params.site_index);
+
+      // Record this run so the UI can show what was run, when, and how it
+      // changed from the previous run.
+      const newCov = simRes.data?.stats?.coverage_pct;
+      setRunCount((n) => {
+        const next = n + 1;
+        if (typeof newCov === "number") {
+          if (n > 0 && prevCoverage !== null) {
+            const delta = newCov - prevCoverage;
+            const arrow = delta > 0.05 ? "▲" : delta < -0.05 ? "▼" : "→";
+            showToast(
+              `Re-run #${next} complete · ${newCov.toFixed(1)}% reliable ${arrow} ${delta >= 0 ? "+" : ""}${delta.toFixed(1)} pts`,
+              "success"
+            );
+          } else {
+            showToast(`Simulation complete · ${newCov.toFixed(1)}% reliable coverage`, "success");
+          }
+        }
+        return next;
+      });
+      if (typeof newCov === "number") setPrevCoverage(newCov);
+      setLastRunAt(new Date());
 
       // 2. Run CPE Link Margin Analysis (no retry needed — server already warm from step 1)
       const cpeRes = await axios.post(`${API_BASE}/api/cpe-analysis`, {
@@ -546,8 +574,8 @@ export default function Home() {
         ) : (
           /* Dashboard Layout */
           <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Map View — 60% height, wedges update live from compass rose */}
-            <div className="h-[60%] w-full border-b border-slate-800 relative min-h-[360px]">
+            {/* Map View — wedges update live from compass rose */}
+            <div className="h-[56%] w-full border-b border-slate-800 relative min-h-[340px]">
               <MapView
                 sites={parsedData.sites}
                 polygons={parsedData.polygons}
@@ -583,17 +611,37 @@ export default function Home() {
             </div>
 
             {/* Bottom half: Results & Configuration Details */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto px-6 py-6">
+              <div className="max-w-screen-2xl mx-auto space-y-5">
               {isLoading && slowStart && (
                 <div className="flex flex-col items-center gap-2 mt-4 text-center">
-                  <p className="text-sm text-amber-400 font-medium">⏳ Waking up the backend…</p>
+                  <p className="text-sm text-amber-400 font-medium">⏳ Still working…</p>
                   <p className="text-xs text-slate-400 max-w-xs">
-                    The server sleeps after inactivity. First run takes 30–50 s on the free tier. Hang tight!
+                    Large coverage areas or many sites can take a little longer to
+                    compute. If the backend was idle it may be cold-starting — hang tight.
                   </p>
                 </div>
               )}
               {simulationResults ? (
                 <>
+                  {/* Run summary — what was run, when, and the key parameters */}
+                  <RunSummaryBar
+                    runCount={runCount}
+                    lastRunAt={lastRunAt}
+                    isLoading={isLoading}
+                    projectName={fileName.replace(/\.[^/.]+$/, "")}
+                    btsName={
+                      selectedBtsIndex === -1
+                        ? "All towers"
+                        : parsedData.sites.filter((s) => s.is_bts_candidate)[selectedBtsIndex]?.name
+                    }
+                    frequencyMhz={activeSimulationParams?.frequency_mhz}
+                    model={activeSimulationParams?.model}
+                    environment={activeSimulationParams?.environment}
+                    eirpDbm={activeSimulationParams?.eirp_dbm}
+                    systemMarginDb={activeSimulationParams?.system_margin_db}
+                  />
+
                   {/* Results summary banner */}
                   <ResultsBanner
                     plainEnglishResult={simulationResults.plain_english_result}
@@ -699,6 +747,7 @@ export default function Home() {
                   </div>
                 </div>
               )}
+              </div>
             </div>
           </div>
         )}
