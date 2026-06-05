@@ -9,7 +9,7 @@ from propagation import (terrain_aware_loss, okumura_hata, compute_eirp, compute
                           haversine_distance, bearing, sector_gain,
                           get_sector_gain_for_point, best_sector_for_point,
                           PathLossResult, ENVIRONMENT_SIGMA, ENVIRONMENT_CLUTTER_LOSS,
-                          shadowing_margin)
+                          shadowing_margin, EFFECTIVE_EARTH_RADIUS_KM, DEYGOUT_MAX_LOSS_DB)
 from terrain import TerrainGrid, get_elevation, get_elevation_np
 
 
@@ -67,6 +67,50 @@ def cpe_line_color(rssi: float) -> str:
     elif rssi >= -85.0:
         return "#e67e22"
     return "#95a5a6"
+
+
+# ── Margin-relative classification (single source of truth) ────────────────────
+# Both the heatmap cells AND the CPE dots are classified by how far the MEDIAN RSSI
+# clears the link threshold (= receiver sensitivity + system margin). Because the
+# map and the CPE points use the same median-RSSI physics and the same threshold,
+# a green heatmap cell can never host a red CPE dot — they agree by construction.
+
+GOOD_HEADROOM_DB = 10.0
+EXCELLENT_HEADROOM_DB = 20.0
+
+
+def coverage_tier(rssi: float, threshold_dbm: float) -> int:
+    """0 = no link, 1 = marginal (covered), 2 = good, 3 = excellent."""
+    headroom = rssi - threshold_dbm
+    if headroom >= EXCELLENT_HEADROOM_DB:
+        return 3
+    if headroom >= GOOD_HEADROOM_DB:
+        return 2
+    if headroom >= 0.0:
+        return 1
+    return 0
+
+
+_TIER_FILL = {3: "#2ecc71", 2: "#27ae60", 1: "#f1c40f", 0: ""}
+_TIER_MARKER = {3: "green", 2: "green", 1: "orange", 0: "gray"}
+_TIER_LINE = {3: "#27ae60", 2: "#27ae60", 1: "#f39c12", 0: "#95a5a6"}
+_TIER_STATUS = {3: "🟢 Excellent", 2: "🟢 Good", 1: "🟡 Marginal", 0: "⛔ No Link"}
+
+
+def tier_fill_color(tier: int) -> str:
+    return _TIER_FILL.get(tier, "")
+
+
+def tier_marker_color(tier: int) -> str:
+    return _TIER_MARKER.get(tier, "gray")
+
+
+def tier_line_color(tier: int) -> str:
+    return _TIER_LINE.get(tier, "#95a5a6")
+
+
+def tier_status(tier: int) -> str:
+    return _TIER_STATUS.get(tier, "⛔ No Link")
 
 
 # ── Coverage grid ─────────────────────────────────────────────────────────────
@@ -149,6 +193,15 @@ def deygout_loss_np(d_arr: np.ndarray, e_arr: np.ndarray,
     term = math.sqrt((best_v - 0.1) ** 2 + 1.0) + best_v - 0.1
     obs_loss = max(0.0, 6.9 + 20.0 * math.log10(term)) if term > 0.0 else 0.0
 
+    # Only recurse when the dominant edge genuinely protrudes above the line of
+    # sight (best_v > 0). For a grazing / sub-LoS dominant edge there is just a
+    # small single-edge Fresnel loss; recursing there would treat the smooth
+    # earth-curvature bulge as a chain of phantom knife edges and pile up tens of
+    # dB on a near-line-of-sight path. This MUST match propagation.deygout_loss so
+    # the heatmap and the per-CPE link budget stay on identical physics.
+    if best_v <= 0.0:
+        return min(obs_loss, DEYGOUT_MAX_LOSS_DB)
+
     obs_elev = e_arr[best_idx]
 
     left_loss = deygout_loss_np(d_arr[:best_idx + 1], e_arr[:best_idx + 1],
@@ -159,7 +212,7 @@ def deygout_loss_np(d_arr: np.ndarray, e_arr: np.ndarray,
     right_loss = deygout_loss_np(right_d, right_e,
                                   obs_elev, h_rx_asl, f_mhz, depth + 1)
 
-    return min(obs_loss + left_loss + right_loss, 30.0)
+    return min(obs_loss + left_loss + right_loss, DEYGOUT_MAX_LOSS_DB)
 
 
 # ── Coverage grid ─────────────────────────────────────────────────────────────
@@ -253,8 +306,12 @@ def compute_coverage_grid(bts_site: Any, equipment_bts: Any, equipment_cpe: Any,
     clutter_db = float(ENVIRONMENT_CLUTTER_LOSS.get(environment, 3))
     loss_array += clutter_db
 
-    # If terrain aware and not flat, compute diffraction loss for each cell
-    if model == 'terrain_aware' and not terrain_grid.is_flat:
+    # Terrain-aware model: compute per-cell diffraction loss. This runs even when
+    # SRTM terrain is unavailable (is_flat) because the earth-curvature bulge alone
+    # still imposes a realistic radio horizon; with terrain loaded it also captures
+    # hill/ridge obstruction. The pure flat model (model != 'terrain_aware') skips
+    # this for a quick, horizon-unlimited estimate.
+    if model == 'terrain_aware':
         # Precompute profile coordinates for all cells
         t_points = np.linspace(0, 1.0, 100) # (100,)
         
@@ -265,17 +322,20 @@ def compute_coverage_grid(bts_site: Any, equipment_bts: Any, equipment_cpe: Any,
         # Get elevations for all profile points at once (O(1) database/cache roundtrip)
         elevations_flat = get_elevation_np(terrain_grid, lats_3d.ravel(), lons_3d.ravel())
         elevations_3d = elevations_flat.reshape(nrows, ncols, 100)
-        
+
         diffraction_array = np.zeros((nrows, ncols))
         rx_asls = rx_grounds + cpe_height
-        
+
         for r in range(nrows):
             for c in range(ncols):
                 dist_km = distances_km[r, c]
                 if dist_km <= 0.05:
                     continue
                 d_arr = dist_km * t_points
-                e_arr = elevations_3d[r, c]
+                # Add earth-curvature bulge so beyond-horizon paths are correctly
+                # obstructed (realistic radio horizon) rather than appearing as LoS.
+                bulge = (d_arr * (dist_km - d_arr)) / (2.0 * EFFECTIVE_EARTH_RADIUS_KM) * 1000.0
+                e_arr = elevations_3d[r, c] + bulge
                 diffraction_array[r, c] = deygout_loss_np(d_arr, e_arr, bts_asl, rx_asls[r, c], f_mhz)
                 
         loss_array += diffraction_array
@@ -435,22 +495,28 @@ def compute_cpe_analysis(bts_site: Any, cpe_sites: List[Any],
             diffraction_loss = pl_result.diffraction_db
             eff_hb = pl_result.effective_hb_m
 
-            # Optimistic: base + diffraction (no margins)
-            rssi_opt = compute_rssi(pl_result.total_db, eirp,
-                                    equipment_cpe.antenna_gain_dbi,
-                                    equipment_cpe.cable_loss_db, sg_db)
-            # Realistic: + shadowing 90% + system margin
-            rssi_real = compute_rssi(pl_result.total_db + shad_90 + system_margin_db,
+            # Median (50% locations): deterministic path loss, no shadowing margin.
+            # This is the physical signal level — and it is the SAME quantity the
+            # heatmap grid plots, so map cells and CPE dots are directly comparable.
+            rssi_median = compute_rssi(pl_result.total_db, eirp,
+                                       equipment_cpe.antenna_gain_dbi,
+                                       equipment_cpe.cable_loss_db, sg_db)
+            # Realistic (90% locations): minus shadowing fade margin.
+            rssi_real = compute_rssi(pl_result.total_db + shad_90,
                                      eirp, equipment_cpe.antenna_gain_dbi,
                                      equipment_cpe.cable_loss_db, sg_db)
-            # Pessimistic: + clutter + shadowing 95% + system margin
-            rssi_pess = compute_rssi(pl_result.total_db + clutter + shad_95 + system_margin_db,
+            # Conservative (95% locations): minus clutter + 95% shadowing.
+            rssi_pess = compute_rssi(pl_result.total_db + clutter + shad_95,
                                      eirp, equipment_cpe.antenna_gain_dbi,
                                      equipment_cpe.cable_loss_db, sg_db)
 
-            # Use realistic RSSI as the primary displayed value
-            rssi = rssi_real
-            margin = rssi - equipment_cpe.receiver_sensitivity_dbm
+            # Primary displayed value = median RSSI. Classification is margin-relative:
+            # tier is decided by how far the median clears (sensitivity + system margin),
+            # identical to the heatmap. link_margin = median above the receiver floor.
+            rssi = rssi_median
+            link_threshold = equipment_cpe.receiver_sensitivity_dbm + system_margin_db
+            tier = coverage_tier(rssi_median, link_threshold)
+            margin = rssi_median - equipment_cpe.receiver_sensitivity_dbm
 
             if terrain_grid.is_flat:
                 fresnel = "Terrain data not loaded"
@@ -476,15 +542,15 @@ def compute_cpe_analysis(bts_site: Any, cpe_sites: List[Any],
                 "shadowing_margin_95_db": round(shad_95, 1),
                 "system_margin_db": round(system_margin_db, 1),
                 "effective_hb_m": round(eff_hb, 1),
-                "rssi_dbm": round(rssi, 1),               # realistic (primary)
-                "rssi_optimistic_dbm": round(rssi_opt, 1),
+                "rssi_dbm": round(rssi, 1),               # median (primary, matches heatmap)
+                "rssi_optimistic_dbm": round(rssi_median, 1),
                 "rssi_realistic_dbm": round(rssi_real, 1),
                 "rssi_pessimistic_dbm": round(rssi_pess, 1),
                 "link_margin_db": round(margin, 1),
                 "fresnel_clearance": fresnel,
-                "status": cpe_status(rssi),
-                "marker_color": cpe_marker_color(rssi),
-                "line_color": cpe_line_color(rssi),
+                "status": tier_status(tier),
+                "marker_color": tier_marker_color(tier),
+                "line_color": tier_line_color(tier),
             })
         except Exception:
             results.append({
@@ -528,11 +594,11 @@ def coverage_to_geojson(coverage_grid: CoverageGrid,
             if rssi < threshold_dbm:
                 c += 1
                 continue
-            color = get_rssi_color(rssi)
+            color = tier_fill_color(coverage_tier(rssi, threshold_dbm))
             if not color:
                 c += 1
                 continue
-            
+
             # Start of a contiguous run of cells with the same color
             c_start = c
             c += 1
@@ -540,7 +606,7 @@ def coverage_to_geojson(coverage_grid: CoverageGrid,
                 next_rssi = rssi_array[r, c]
                 if next_rssi < threshold_dbm:
                     break
-                next_color = get_rssi_color(next_rssi)
+                next_color = tier_fill_color(coverage_tier(next_rssi, threshold_dbm))
                 if next_color != color:
                     break
                 c += 1

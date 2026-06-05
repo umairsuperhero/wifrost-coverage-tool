@@ -10,6 +10,43 @@ except ImportError:
     _HAS_SCIPY = False
 
 
+# ── Model constants (documented so the physics is auditable) ───────────────────
+
+# 4/3-earth effective radius (km). Used to add the earth-curvature "bulge" to a
+# terrain profile so that beyond-horizon paths are correctly obstructed instead of
+# appearing as clear line-of-sight. a_e = (4/3) * 6371 km ≈ 8493 km.
+EFFECTIVE_EARTH_RADIUS_KM = 8493.0
+
+# Maximum diffraction loss attributed to a single Deygout obstruction chain (dB).
+# Raised from the original 30 dB so that horizon/curvature shadowing can dominate
+# at long range (a deeply obstructed path should not look only ~30 dB down).
+DEYGOUT_MAX_LOSS_DB = 40.0
+
+# Open-area Hata correction is capped (dB). The full Hata open correction is
+# ~27 dB at 600 MHz; real deployments rarely realise the full value (scattered
+# clutter, imperfect siting), so it is capped for a defensible, slightly
+# conservative estimate. Tunable.
+OPEN_AREA_CORRECTION_CAP_DB = 20.0
+
+# Effective BTS height is clamped to this range (m) before entering Hata, which is
+# only valid for 30–200 m base heights. The low clamp also avoids log10 of tiny/
+# negative effective heights over high terrain.
+HB_EFF_MIN_M = 10.0
+HB_EFF_MAX_M = 200.0
+
+
+def earth_bulge_m(d1_km: float, d2_km: float) -> float:
+    """Earth-curvature bulge height (m) at a point d1 from one end, d2 from the other.
+
+    h = (d1 * d2) / (2 * a_e), with distances in km and a_e in km giving km, ×1000 → m.
+    Zero at both endpoints, maximal at mid-path. Added to terrain elevations so the
+    diffraction model sees the spherical earth and enforces a realistic radio horizon.
+    """
+    if d1_km <= 0.0 or d2_km <= 0.0:
+        return 0.0
+    return (d1_km * d2_km) / (2.0 * EFFECTIVE_EARTH_RADIUS_KM) * 1000.0
+
+
 # ── Environment tables ────────────────────────────────────────────────────────
 
 ENVIRONMENT_CLUTTER_LOSS: dict = {
@@ -172,7 +209,16 @@ def deygout_loss(profile: List[Tuple[float, float]],
 
     obs_loss = _knife_edge_loss(h_above, d1_km * 1000.0, d2_km * 1000.0, f_mhz)
 
-    # Recurse into each sub-path
+    # Only recurse into the sub-paths when the dominant edge GENUINELY protrudes
+    # above the line of sight (best_v > 0). For a grazing or sub-LoS dominant edge
+    # (-0.7 < v <= 0) there is just a small single-edge Fresnel loss and no real
+    # secondary obstacle — recursing there would treat the smooth earth-curvature
+    # bulge as a chain of phantom knife edges and pile up tens of dB on a path that
+    # is, physically, near line-of-sight. Gating the recursion keeps short LoS links
+    # loss-free while still shadowing true over-the-horizon paths.
+    if best_v <= 0.0:
+        return min(obs_loss, DEYGOUT_MAX_LOSS_DB)
+
     left_profile = profile[:best_idx + 1]
     left_loss = deygout_loss(left_profile, h_tx_asl, obs_elev, f_mhz, depth + 1)
 
@@ -181,7 +227,7 @@ def deygout_loss(profile: List[Tuple[float, float]],
     right_shifted = [(d - offset, e) for d, e in right_raw]
     right_loss = deygout_loss(right_shifted, obs_elev, h_rx_asl, f_mhz, depth + 1)
 
-    return min(obs_loss + left_loss + right_loss, 30.0)
+    return min(obs_loss + left_loss + right_loss, DEYGOUT_MAX_LOSS_DB)
 
 
 # ── Okumura-Hata (corrected) ──────────────────────────────────────────────────
@@ -199,7 +245,7 @@ def okumura_hata(d_km: float, f_mhz: float, hb_m: float,
 
     if environment in ('open', 'open_water'):
         raw_corr = 4.78 * (math.log10(f_mhz)) ** 2 - 18.33 * math.log10(f_mhz) + 40.94
-        loss -= min(raw_corr, 20.0)  # cap at 20 dB — the full ~27 dB is never achieved in practice
+        loss -= min(raw_corr, OPEN_AREA_CORRECTION_CAP_DB)
     elif environment in ('suburban', 'vegetation_light', 'vegetation_dense', 'port_industrial'):
         loss -= 2.0 * (math.log10(f_mhz / 28.0)) ** 2 + 5.4
 
@@ -273,8 +319,9 @@ def terrain_aware_loss(bts_lat: float, bts_lon: float, bts_height_m: float,
     bts_asl = bts_ground + bts_height_m
     rx_asl  = rx_ground  + rx_height_m
 
-    # Effective BTS height: antenna ASL minus CPE ground elevation, clamped to [30, 200] m
-    hb_eff = float(max(10.0, min(200.0, bts_asl - rx_ground)))
+    # Effective BTS height: antenna ASL minus CPE ground elevation, clamped to the
+    # Hata-valid range [HB_EFF_MIN_M, HB_EFF_MAX_M].
+    hb_eff = float(max(HB_EFF_MIN_M, min(HB_EFF_MAX_M, bts_asl - rx_ground)))
     hm_eff = max(1.0, rx_height_m)
 
     clutter_db = float(ENVIRONMENT_CLUTTER_LOSS.get(environment, 3))
@@ -284,10 +331,17 @@ def terrain_aware_loss(bts_lat: float, bts_lon: float, bts_height_m: float,
     else:
         base_loss = okumura_hata(max(d_total, 0.01), f_mhz, hb_eff, hm_eff, environment)
 
-    if terrain_grid.is_flat or d_total <= 0.05:
+    if d_total <= 0.05:
         return PathLossResult(base_loss, 0.0, clutter_db, hb_eff, environment)
 
+    # Add the earth-curvature bulge to each terrain point so the diffraction model
+    # sees the spherical earth — this enforces a realistic radio horizon instead of
+    # treating long over-the-horizon paths as clear line-of-sight. We apply this
+    # even without SRTM data (flat grid): a 30 m tower simply cannot see a 10 m CPE
+    # beyond the geometric horizon regardless of whether we loaded terrain tiles,
+    # so the heatmap and the CPE link budget stay on one physics.
     profile = get_profile(terrain_grid, bts_lat, bts_lon, rx_lat, rx_lon, n_points=100)
+    profile = [(d, e + earth_bulge_m(d, d_total - d)) for d, e in profile]
     diffraction = deygout_loss(profile, bts_asl, rx_asl, f_mhz)
 
     return PathLossResult(base_loss, diffraction, clutter_db, hb_eff, environment)

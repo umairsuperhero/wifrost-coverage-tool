@@ -18,7 +18,8 @@ from excel_parser import parse_excel_sites
 from terrain import fetch_srtm, get_elevation, get_profile, haversine_distance, TerrainGrid
 from propagation import (compute_eirp, compute_rssi, okumura_hata, terrain_aware_loss,
                           bearing as calc_bearing, best_sector_for_point, sector_gain)
-from heatmap import compute_coverage_grid, coverage_to_geojson
+from heatmap import (compute_coverage_grid, coverage_to_geojson,
+                     coverage_tier, tier_status, tier_marker_color, tier_line_color)
 from report import generate_pdf_report
 import db
 
@@ -94,6 +95,10 @@ class CpeAnalysisRequest(BaseModel):
     rx_gain_dbi: float
     rx_cable_loss_db: float
     rx_sensitivity_dbm: float
+    # Link reliability margin (log-normal shadowing headroom), in dB.
+    # Must match the value used by /api/simulate so the map and the CPE
+    # dots are classified on one identical link-budget threshold.
+    system_margin_db: float = 18.0
     # Sector antenna configuration
     sector_azimuths: List[float] = [0]
     hpbw_deg: float = 65.0
@@ -457,17 +462,20 @@ def simulate(req: SimulateRequest):
                     "best": {
                         "coverage_pct": round(cov_best, 1),
                         "good_pct": round(good_best, 1),
-                        "avg_rssi": round(avg_best, 1)
+                        "avg_rssi": round(avg_best, 1),
+                        "margin_db": round(margin_best, 1)
                     },
                     "realistic": {
                         "coverage_pct": round(cov_real, 1),
                         "good_pct": round(good_real, 1),
-                        "avg_rssi": round(avg_real, 1)
+                        "avg_rssi": round(avg_real, 1),
+                        "margin_db": round(margin_real, 1)
                     },
                     "conservative": {
                         "coverage_pct": round(cov_cons, 1),
                         "good_pct": round(good_cons, 1),
-                        "avg_rssi": round(avg_cons, 1)
+                        "avg_rssi": round(avg_cons, 1),
+                        "margin_db": round(margin_cons, 1)
                     }
                 }
             },
@@ -492,17 +500,20 @@ def simulate(req: SimulateRequest):
             "best": {
                 "coverage_pct": round(cov_best, 1),
                 "good_pct": round(good_best, 1),
-                "avg_rssi": round(avg_best, 1)
+                "avg_rssi": round(avg_best, 1),
+                "margin_db": round(margin_best, 1)
             },
             "realistic": {
                 "coverage_pct": round(cov_real, 1),
                 "good_pct": round(good_real, 1),
-                "avg_rssi": round(avg_real, 1)
+                "avg_rssi": round(avg_real, 1),
+                "margin_db": round(margin_real, 1)
             },
             "conservative": {
                 "coverage_pct": round(cov_cons, 1),
                 "good_pct": round(good_cons, 1),
-                "avg_rssi": round(avg_cons, 1)
+                "avg_rssi": round(avg_cons, 1),
+                "margin_db": round(margin_cons, 1)
             }
         },
         "terrain_loaded": not terrain_grid.is_flat
@@ -534,6 +545,12 @@ def cpe_analysis(req: CpeAnalysisRequest):
     eirp = compute_eirp(req.tx_power_dbm, req.antenna_gain_dbi, req.cable_loss_db)
     covered_count = 0
 
+    # One link-budget threshold shared with the coverage map. A CPE "links"
+    # only once its median RSSI clears the receiver sensitivity PLUS the same
+    # reliability margin the heatmap is painted with — so a green map cell and
+    # a green CPE dot now mean the same thing.
+    link_threshold = req.rx_sensitivity_dbm + req.system_margin_db
+
     for idx, s in enumerate(cpe_sites):
         best_rssi = -999.0
         best_margin = -999.0
@@ -554,7 +571,7 @@ def cpe_analysis(req: CpeAnalysisRequest):
 
             cpe_height = s.get("height_m") or 10.0
 
-            if req.model == "terrain_aware" and not terrain_grid.is_flat:
+            if req.model == "terrain_aware":
                 loss_db, _, _ = terrain_aware_loss(
                     bts["latitude"], bts["longitude"], req.bts_height,
                     s["latitude"], s["longitude"], cpe_height,
@@ -586,12 +603,14 @@ def cpe_analysis(req: CpeAnalysisRequest):
                 best_bts_idx = actual_bts_idx
                 best_bts_name = bts["name"]
 
-        status = "🔴 Fail (No Signal)"
-        if best_margin >= 10.0:
-            status = "🟢 Pass (Excellent)"
-            covered_count += 1
-        elif best_margin >= 0.0:
-            status = "🟡 Pass (Marginal)"
+        # Classify on the SAME margin-relative tiers as the map.
+        # tier 0 = no link, 1 = marginal, 2 = good, 3 = excellent.
+        tier = coverage_tier(best_rssi, link_threshold)
+        # margin_db is reported relative to the reliability threshold (head-room
+        # above a *reliable* link), not raw sensitivity, so the table, the map,
+        # and the summary bar all speak the same language.
+        headroom_db = best_rssi - link_threshold
+        if tier >= 1:
             covered_count += 1
 
         cpe_results.append({
@@ -599,8 +618,12 @@ def cpe_analysis(req: CpeAnalysisRequest):
             "distance_km": round(best_dist, 2),
             "elevation_m": round(get_elevation(terrain_grid, s["latitude"], s["longitude"]), 1),
             "rssi_dbm": round(best_rssi, 1),
-            "margin_db": round(best_margin, 1),
-            "status": status,
+            "margin_db": round(headroom_db, 1),
+            "raw_margin_db": round(best_margin, 1),
+            "tier": tier,
+            "status": tier_status(tier),
+            "marker_color": tier_marker_color(tier),
+            "line_color": tier_line_color(tier),
             "latitude": s["latitude"],
             "longitude": s["longitude"],
             "best_sector": best_sec,

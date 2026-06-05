@@ -293,6 +293,7 @@ export default function Home() {
         rx_gain_dbi: params.rx_gain_dbi,
         rx_cable_loss_db: params.rx_cable_loss_db,
         rx_sensitivity_dbm: params.rx_sensitivity_dbm,
+        system_margin_db: params.system_margin_db,
         sector_azimuths: params.sector_azimuths,
         hpbw_deg: params.hpbw_deg,
         front_to_back_db: params.front_to_back_db,
@@ -455,6 +456,7 @@ export default function Home() {
           rx_gain_dbi: params.rx_gain_dbi ?? 10.0,
           rx_cable_loss_db: params.rx_cable_loss_db ?? 0.5,
           rx_sensitivity_dbm: params.rx_sensitivity_dbm ?? -104.0,
+          system_margin_db: params.system_margin_db ?? 18.0,
           sector_azimuths: params.sector_azimuths ?? [0],
           hpbw_deg: params.hpbw_deg ?? 65.0,
           front_to_back_db: params.front_to_back_db ?? 25.0

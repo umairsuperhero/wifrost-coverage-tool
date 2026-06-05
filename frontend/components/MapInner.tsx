@@ -23,10 +23,16 @@ const getBtsIcon = (isActive: boolean) => {
   });
 };
 
-const getCpeColor = (margin_db: number): string => {
-  if (margin_db >= 10) return "#22C55E"; // emerald-500 — good
-  if (margin_db >= 0)  return "#F59E0B"; // amber-500  — marginal
-  return "#EF4444";                       // red-500    — fail
+// Colour a CPE by its link tier (0 no-link → 3 excellent), the SAME
+// classification the heatmap cells use, so a green dot always sits on a
+// green cell. Falls back to head-room margin for older backend responses.
+const TIER_HEX = ["#EF4444", "#F59E0B", "#22C55E", "#16A34A"];
+const getCpeColor = (cpe: { tier?: number; margin_db: number }): string => {
+  if (typeof cpe.tier === "number") return TIER_HEX[cpe.tier] ?? "#EF4444";
+  if (cpe.margin_db >= 20) return "#16A34A";
+  if (cpe.margin_db >= 10) return "#22C55E";
+  if (cpe.margin_db >= 0)  return "#F59E0B";
+  return "#EF4444";
 };
 
 const getCpeIcon = (status: string, isSelected: boolean) => {
@@ -366,7 +372,7 @@ export default function MapInner({
         {/* CPE client Markers */}
         {cpeResults.map((cpe, index) => {
           const isSelected = cpe.name === selectedCpeName;
-          const color = getCpeColor(cpe.margin_db);
+          const color = getCpeColor(cpe);
 
           return (
             <CircleMarker

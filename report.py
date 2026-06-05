@@ -160,9 +160,11 @@ def _legend():
 
 # ── Margin colour helper ───────────────────────────────────────────────────────
 def _mc(margin_db):
+    # margin_db is head-room above the reliability threshold
+    # (sensitivity + system margin): >=10 dB excellent, >=0 dB reliable, else no link.
     if margin_db >= 10.0:
         return C_PASS_BG, C_PASS_TX
-    if margin_db >= 3.0:
+    if margin_db >= 0.0:
         return C_WARN_BG, C_WARN_TX
     return C_FAIL_BG, C_FAIL_TX
 
@@ -464,11 +466,11 @@ def generate_pdf_report(
         story.append(Paragraph("Client Site Coverage Analysis",
                                _s('P2T', 18, C_NAVY, bold=True, leading=22)))
 
-        pass_count = sum(1 for c in cpe_results if c.get('margin_db', -999) >= 3.0)
+        pass_count = sum(1 for c in cpe_results if c.get('margin_db', -999) >= 0.0)
         total = len(cpe_results)
         story.append(Paragraph(
             f"<b>{pass_count} of {total}</b> client sites achieve reliable coverage "
-            f"(link margin ≥ 3 dB). &nbsp; "
+            f"(RSSI clears sensitivity + system margin). &nbsp; "
             f"<font color='#065F46'><b>PASS</b></font> ≥ 10 dB margin &nbsp; · &nbsp; "
             f"<font color='#92400E'><b>MARGINAL</b></font> 3–10 dB &nbsp; · &nbsp; "
             f"<font color='#991B1B'><b>FAIL</b></font> &lt; 3 dB",

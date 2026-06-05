@@ -11,8 +11,12 @@ export interface CpeResult {
   distance_km: number;
   elevation_m: number;
   rssi_dbm: number;
-  margin_db: number;
+  margin_db: number;          // head-room above the reliability threshold (dB)
+  raw_margin_db?: number;     // RSSI minus raw sensitivity (dB)
+  tier?: number;              // 0 no-link, 1 marginal, 2 good, 3 excellent
   status: string;
+  marker_color?: string;
+  line_color?: string;
   latitude: number;
   longitude: number;
   best_sector?: number;
@@ -20,6 +24,18 @@ export interface CpeResult {
   serving_bts_name?: string;
   serving_bts_index?: number;
 }
+
+// Single source of truth for CPE tier → colour, mirrors heatmap.coverage_tier.
+// Falls back to head-room margin when the backend predates the tier field.
+export function cpeTier(c: { tier?: number; margin_db: number }): number {
+  if (typeof c.tier === "number") return c.tier;
+  if (c.margin_db >= 20) return 3;
+  if (c.margin_db >= 10) return 2;
+  if (c.margin_db >= 0) return 1;
+  return 0;
+}
+
+export const TIER_HEX = ["#EF4444", "#F59E0B", "#22C55E", "#16A34A"];
 
 interface CpeTableProps {
   cpeResults: CpeResult[];
@@ -45,7 +61,7 @@ export default function CpeTable({ cpeResults, selectedCpeName, onSelectCpe, sec
         r.elevation_m,
         r.rssi_dbm,
         r.margin_db,
-        `"${r.status.replace(/🟢|🟡|🔴/g, "").trim()}"`,
+        `"${r.status.replace(/🟢|🟡|🔴|⛔/g, "").trim()}"`,
         r.latitude,
         r.longitude,
       ];
@@ -155,7 +171,7 @@ export default function CpeTable({ cpeResults, selectedCpeName, onSelectCpe, sec
                     <td className={`py-3 px-4 ${cpe.rssi_dbm >= -85 ? "text-slate-100" : "text-red-400"}`}>
                       {cpe.rssi_dbm.toFixed(1)} dBm
                     </td>
-                    <td className={`py-3 px-4 font-semibold ${cpe.margin_db >= 10 ? "text-emerald-400" : cpe.margin_db >= 0 ? "text-amber-400" : "text-red-400"}`}>
+                    <td className={`py-3 px-4 font-semibold ${cpeTier(cpe) >= 2 ? "text-emerald-400" : cpeTier(cpe) === 1 ? "text-amber-400" : "text-red-400"}`}>
                       {cpe.margin_db.toFixed(1)} dB
                     </td>
                     <td className="py-3 px-4">
@@ -177,7 +193,7 @@ export default function CpeTable({ cpeResults, selectedCpeName, onSelectCpe, sec
                     )}
                     <td className="py-3 px-4">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${getStatusStyle(cpe.status)}`}>
-                        {cpe.status.replace(/🟢|🟡|🔴/g, "").trim()}
+                        {cpe.status.replace(/🟢|🟡|🔴|⛔/g, "").trim()}
                       </span>
                     </td>
                   </tr>
