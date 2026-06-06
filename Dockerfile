@@ -2,11 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Build tools for some Python wheels, and ca-certificates so GDAL/libcurl
-# (rasterio /vsicurl reads of ESA WorldCover over HTTPS) can verify TLS.
+# Build tools for some Python wheels; ca-certificates so GDAL/libcurl can verify
+# TLS for the rasterio /vsicurl reads of ESA WorldCover over HTTPS; and libexpat1
+# which rasterio's bundled GDAL dynamically links (absent from python:slim).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
+    libexpat1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies first (layer cached unless requirements.txt changes)
