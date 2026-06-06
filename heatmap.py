@@ -223,8 +223,15 @@ def compute_coverage_grid(bts_site: Any, equipment_bts: Any, equipment_cpe: Any,
                           resolution_m: float = 100.0,
                           model: str = 'terrain_aware',
                           environment: str = 'open',
-                          bts_height_override: Optional[float] = None) -> CoverageGrid:
-    """Generate a grid of RSSI values over the bounded area using parallel vectorized operations."""
+                          bts_height_override: Optional[float] = None,
+                          landcover_grid: Any = None) -> CoverageGrid:
+    """Generate a grid of RSSI values over the bounded area using parallel vectorized operations.
+
+    If ``landcover_grid`` is provided and available, clutter loss varies per cell
+    from ESA WorldCover land cover; otherwise a single environment-based clutter
+    constant is used. The CPE link budget applies clutter the same way (at the
+    receiver location), so the map and the per-CPE dots stay consistent.
+    """
     min_lat = bounds['minLat']
     max_lat = bounds['maxLat']
     min_lon = bounds['minLon']
@@ -302,9 +309,14 @@ def compute_coverage_grid(bts_site: Any, equipment_bts: Any, equipment_cpe: Any,
         fspl = 20.0 * np.log10(distances_km_clamped) + 20.0 * math.log10(f_mhz) + 32.44
         loss_array = np.maximum(loss, fspl)
 
-    # Clutter loss
-    clutter_db = float(ENVIRONMENT_CLUTTER_LOSS.get(environment, 3))
-    loss_array += clutter_db
+    # Clutter loss — per-pixel from land cover when available, else a single
+    # environment constant. Applied at the receiver (cell) location.
+    env_clutter_db = float(ENVIRONMENT_CLUTTER_LOSS.get(environment, 3))
+    if landcover_grid is not None and getattr(landcover_grid, "available", False):
+        clutter_array = landcover_grid.get_clutter_db_np(lats_2d, lons_2d, env_clutter_db)
+    else:
+        clutter_array = env_clutter_db
+    loss_array += clutter_array
 
     # Terrain-aware model: compute per-cell diffraction loss. This runs even when
     # SRTM terrain is unavailable (is_flat) because the earth-curvature bulge alone

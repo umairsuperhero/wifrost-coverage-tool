@@ -16,8 +16,10 @@ from wifi_frost_defaults import WifrostBTS, WifrostCPE
 from kml_parser import parse_kml_or_kmz, KMLData, KMLPoint, KMLPolygon, KMLLineString
 from excel_parser import parse_excel_sites
 from terrain import fetch_srtm, get_elevation, get_profile, haversine_distance, TerrainGrid
+from landcover import fetch_landcover
 from propagation import (compute_eirp, compute_rssi, okumura_hata, terrain_aware_loss,
-                          bearing as calc_bearing, best_sector_for_point, sector_gain)
+                          bearing as calc_bearing, best_sector_for_point, sector_gain,
+                          ENVIRONMENT_CLUTTER_LOSS)
 from heatmap import (compute_coverage_grid, coverage_to_geojson,
                      coverage_tier, tier_status, tier_marker_color, tier_line_color)
 from report import generate_pdf_report
@@ -298,7 +300,10 @@ def simulate(req: SimulateRequest):
     
     # Fetch terrain
     terrain_grid = fetch_srtm(bounds, srtm_key)
-    
+
+    # Fetch land cover for per-pixel clutter (graceful fallback if unavailable)
+    landcover_grid = fetch_landcover(bounds)
+
     # Equipment specifications from defaults, with overrides
     eb = WifrostBTS()
     eb.antenna_height_default_m = req.bts_height
@@ -340,7 +345,8 @@ def simulate(req: SimulateRequest):
                 resolution_m=resolution_m,
                 model=req.model,
                 environment=env,
-                bts_height_override=req.bts_height
+                bts_height_override=req.bts_height,
+                landcover_grid=landcover_grid
             )
             grids.append(grid_i)
         from heatmap import merge_coverage_grids
@@ -356,9 +362,10 @@ def simulate(req: SimulateRequest):
             resolution_m=resolution_m,
             model=req.model,
             environment=env,
-            bts_height_override=req.bts_height
+            bts_height_override=req.bts_height,
+            landcover_grid=landcover_grid
         )
-    
+
     # Generate three scenarios: Best, Realistic, Conservative
     # Realistic uses req.system_margin_db (e.g. 20 dB margin, meaning threshold RSSI = sensitivity + 20)
     # Best uses margin - 5 dB (e.g. 15 dB margin, threshold RSSI = sensitivity + 15)
@@ -493,7 +500,9 @@ def simulate(req: SimulateRequest):
             "avg_rssi": round(avg_real, 1),
             "max_range_km": grid.stats["max_range_km"],
             "total_area_km2": grid.stats["total_area_km2"],
-            "terrain_loaded": not terrain_grid.is_flat
+            "terrain_loaded": not terrain_grid.is_flat,
+            "landcover_loaded": bool(getattr(landcover_grid, "available", False)),
+            "landcover_summary": landcover_grid.class_histogram() if getattr(landcover_grid, "available", False) else {}
         },
         "plain_english_result": plain_english,
         "three_scenarios": {
@@ -538,7 +547,12 @@ def cpe_analysis(req: CpeAnalysisRequest):
     # Load key and fetch terrain
     srtm_key = os.getenv("OPENTOPOGRAPHY_API_KEY", "")
     terrain_grid = fetch_srtm(bounds, srtm_key)
-    
+
+    # Land cover for per-pixel clutter — same source the heatmap uses, so the
+    # CPE link budget and the map agree cell-for-cell.
+    landcover_grid = fetch_landcover(bounds)
+    env_clutter_db = float(ENVIRONMENT_CLUTTER_LOSS.get(req.environment, 3))
+
     cpe_sites = [s for s in req.sites if not s["is_bts_candidate"]]
     cpe_results = []
 
@@ -571,11 +585,19 @@ def cpe_analysis(req: CpeAnalysisRequest):
 
             cpe_height = s.get("height_m") or 10.0
 
+            # Per-pixel clutter at the CPE location (falls back to env constant).
+            if getattr(landcover_grid, "available", False):
+                cpe_clutter_db = float(landcover_grid.get_clutter_db_np(
+                    np.array([s["latitude"]]), np.array([s["longitude"]]), env_clutter_db)[0])
+            else:
+                cpe_clutter_db = None
+
             if req.model == "terrain_aware":
                 loss_db, _, _ = terrain_aware_loss(
                     bts["latitude"], bts["longitude"], req.bts_height,
                     s["latitude"], s["longitude"], cpe_height,
-                    req.frequency_mhz, terrain_grid, req.environment
+                    req.frequency_mhz, terrain_grid, req.environment,
+                    clutter_db_override=cpe_clutter_db
                 )
             else:
                 loss_db = okumura_hata(d_km, req.frequency_mhz, req.bts_height, cpe_height, req.environment)
@@ -641,9 +663,11 @@ def cpe_analysis(req: CpeAnalysisRequest):
             "total_cpes": total_cpes,
             "covered_cpes": covered_count,
             "coverage_pct": coverage_pct,
-            "terrain_loaded": not terrain_grid.is_flat
+            "terrain_loaded": not terrain_grid.is_flat,
+            "landcover_loaded": bool(getattr(landcover_grid, "available", False))
         },
-        "terrain_loaded": not terrain_grid.is_flat
+        "terrain_loaded": not terrain_grid.is_flat,
+        "landcover_loaded": bool(getattr(landcover_grid, "available", False))
     }
 
 @app.post("/api/generate-report")

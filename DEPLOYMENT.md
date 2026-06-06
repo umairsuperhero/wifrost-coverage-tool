@@ -56,9 +56,24 @@ Edit & Deploy New Revision → Variables, or via CLI):
 
 | Variable | Purpose |
 |----------|---------|
-| `OPENTOPOGRAPHY_API_KEY` | SRTM elevation profiles (required for real terrain) |
+| `OPENTOPOGRAPHY_API_KEY` | SRTM elevation (real terrain). **Without it the backend silently falls back to flat earth** — coverage looks like smooth geometric wedges. Free key: <https://opentopography.org/developers>. |
 | `GEMINI_API_KEY` | Google Gemini AI interpreter (optional) |
 | `CORS_ORIGINS` | Comma-separated allowed frontends. Defaults to `*` if unset. Currently set to `https://wifrost-coverage-tool.vercel.app`. Set to `*` to also allow Vercel preview URLs. |
+
+> **Terrain & land cover — two independent accuracy layers:**
+> 1. **Terrain (SRTM):** needs `OPENTOPOGRAPHY_API_KEY`. The API reports
+>    `terrain_loaded: true` when active.
+> 2. **Land-cover clutter (ESA WorldCover):** fetched per-pixel from the public
+>    AWS `esa-worldcover` bucket via windowed COG reads — **no key required**.
+>    Reports `landcover_loaded: true`; falls back to the per-scene environment
+>    clutter constant over ocean tiles or on network failure.
+>
+> Set the SRTM key from the CLI:
+> ```bash
+> gcloud run services update wifrost-api \
+>   --region=northamerica-south1 --project=wifrost-rf \
+>   --set-env-vars OPENTOPOGRAPHY_API_KEY=YOUR_KEY_HERE
+> ```
 
 Update an env var from the CLI:
 ```bash

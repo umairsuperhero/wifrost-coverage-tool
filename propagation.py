@@ -1,6 +1,6 @@
 import math
 import numpy as np
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from terrain import TerrainGrid, get_profile, get_elevation, haversine_distance
 
 try:
@@ -296,7 +296,8 @@ class PathLossResult:
 def terrain_aware_loss(bts_lat: float, bts_lon: float, bts_height_m: float,
                        rx_lat: float, rx_lon: float, rx_height_m: float,
                        f_mhz: float, terrain_grid: TerrainGrid,
-                       environment: str = 'open') -> PathLossResult:
+                       environment: str = 'open',
+                       clutter_db_override: Optional[float] = None) -> PathLossResult:
     """
     Path loss using corrected Okumura-Hata (effective height above CPE ground)
     plus full Deygout multi-edge diffraction.
@@ -324,7 +325,12 @@ def terrain_aware_loss(bts_lat: float, bts_lon: float, bts_height_m: float,
     hb_eff = float(max(HB_EFF_MIN_M, min(HB_EFF_MAX_M, bts_asl - rx_ground)))
     hm_eff = max(1.0, rx_height_m)
 
-    clutter_db = float(ENVIRONMENT_CLUTTER_LOSS.get(environment, 3))
+    # Clutter: per-pixel land-cover value when supplied (keeps the CPE link
+    # budget identical to the heatmap), else the environment constant.
+    if clutter_db_override is not None:
+        clutter_db = float(clutter_db_override)
+    else:
+        clutter_db = float(ENVIRONMENT_CLUTTER_LOSS.get(environment, 3))
 
     if environment == 'open_water':
         base_loss = water_path_loss(max(d_total, 0.01), f_mhz, hb_eff, hm_eff)

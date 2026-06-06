@@ -20,3 +20,6 @@ fastapi==0.110.0
 uvicorn==0.28.0
 python-multipart==0.0.9
 defusedxml==0.7.1
+# rasterio: windowed reads of ESA WorldCover Cloud-Optimised GeoTIFFs over HTTP
+# for per-pixel land-cover clutter. Wheels bundle GDAL (no apt packages needed).
+rasterio==1.4.3

@@ -54,6 +54,9 @@ export interface SimulationStats {
   avg_rssi: number;
   max_range_km: number;
   total_area_km2: number;
+  terrain_loaded?: boolean;
+  landcover_loaded?: boolean;
+  landcover_summary?: Record<string, number>;
 }
 
 export interface ScenarioStats {
@@ -640,6 +643,8 @@ export default function Home() {
                     environment={activeSimulationParams?.environment}
                     eirpDbm={activeSimulationParams?.eirp_dbm}
                     systemMarginDb={activeSimulationParams?.system_margin_db}
+                    terrainLoaded={simulationResults.stats.terrain_loaded}
+                    landcoverLoaded={simulationResults.stats.landcover_loaded}
                   />
 
                   {/* Results summary banner */}

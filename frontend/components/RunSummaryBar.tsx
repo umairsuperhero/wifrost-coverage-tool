@@ -12,6 +12,8 @@ interface RunSummaryBarProps {
   environment?: string;
   eirpDbm?: number;
   systemMarginDb?: number;
+  terrainLoaded?: boolean;
+  landcoverLoaded?: boolean;
 }
 
 const MODEL_LABEL: Record<string, string> = {
@@ -49,9 +51,26 @@ function Chip({ icon, label, value }: { icon: React.ReactNode; label: string; va
   );
 }
 
+function DataChip({ label, on }: { label: string; on: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 text-xs rounded-lg px-2.5 py-1 border ${
+        on
+          ? "text-emerald-300 bg-emerald-500/10 border-emerald-500/30"
+          : "text-slate-400 bg-slate-800/60 border-slate-700/60"
+      }`}
+      title={on ? `${label} data loaded for this run` : `${label} unavailable — using fallback assumption`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${on ? "bg-emerald-400" : "bg-slate-500"}`} />
+      {label} {on ? "on" : "off"}
+    </span>
+  );
+}
+
 export default function RunSummaryBar({
   runCount, lastRunAt, isLoading, projectName, btsName,
   frequencyMhz, model, environment, eirpDbm, systemMarginDb,
+  terrainLoaded, landcoverLoaded,
 }: RunSummaryBarProps) {
   // Re-render every 15 s so the "x ago" label stays fresh.
   const [, setTick] = useState(0);
@@ -101,6 +120,8 @@ export default function RunSummaryBar({
           {typeof systemMarginDb === "number" && (
             <Chip icon={<ShieldCheck className="w-3.5 h-3.5" />} label="Margin" value={`${systemMarginDb.toFixed(0)} dB`} />
           )}
+          {typeof terrainLoaded === "boolean" && <DataChip label="Terrain" on={terrainLoaded} />}
+          {typeof landcoverLoaded === "boolean" && <DataChip label="Land cover" on={landcoverLoaded} />}
         </div>
       </div>
     </div>

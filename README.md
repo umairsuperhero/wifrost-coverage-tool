@@ -175,8 +175,9 @@ A pre-formatted template is available in `sample_data/sites_template.xlsx`.
 The tool implements **Okumura-Hata** path loss (150–1500 MHz) with:
 
 - Real SRTM 30m terrain elevation from [OpenTopography](https://opentopography.org/)
+- Earth-curvature radio horizon (4/3-radius bulge) so over-the-horizon paths are correctly shadowed
 - Effective BTS height correction over terrain profile
-- Clutter loss per environment class (Open, Suburban, Urban, Dense Vegetation, etc.)
+- **Per-pixel clutter from [ESA WorldCover](https://esa-worldcover.org/) 10 m land cover** (tree cover, built-up, water, mangroves, …) — no API key needed; falls back to a per-environment clutter constant when unavailable
 - Location variability margin (shadowing standard deviation ≈ 8 dB)
 - Deygout diffraction loss for obstructed paths
 - Sectorized antenna pattern gain (parabolic horizontal + cosine vertical model)
