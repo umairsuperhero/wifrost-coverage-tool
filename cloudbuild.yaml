@@ -21,6 +21,16 @@ steps:
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
+      # Real SRTM terrain + ESA WorldCover (rasterio/GDAL) plus the grid's 3D
+      # profile arrays peak well above the 512 MiB default — 512 MiB OOM-killed
+      # the container (503 "error loading simulation"). Pin 2 GiB so redeploys
+      # keep it. Long timeout covers cold-start + first uncached data fetch.
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '1'
+      - '--timeout'
+      - '120'
 
 images:
   - 'gcr.io/$PROJECT_ID/wifrost-api:$COMMIT_SHA'
