@@ -502,7 +502,8 @@ def simulate(req: SimulateRequest):
             "total_area_km2": grid.stats["total_area_km2"],
             "terrain_loaded": not terrain_grid.is_flat,
             "landcover_loaded": bool(getattr(landcover_grid, "available", False)),
-            "landcover_summary": landcover_grid.class_histogram() if getattr(landcover_grid, "available", False) else {}
+            "landcover_summary": landcover_grid.class_histogram() if getattr(landcover_grid, "available", False) else {},
+            "landcover_diag": getattr(landcover_grid, "diag", "")
         },
         "plain_english_result": plain_english,
         "three_scenarios": {

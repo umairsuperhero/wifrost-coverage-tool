@@ -62,6 +62,7 @@ class LandCoverGrid:
     nrows: int
     ncols: int
     available: bool = False    # False ⇒ caller should use fallback clutter
+    diag: str = ""             # short reason when unavailable (for ops/debug)
 
     def get_clutter_db_np(self, lats: np.ndarray, lons: np.ndarray,
                           fallback_db: float) -> np.ndarray:
@@ -104,13 +105,27 @@ class LandCoverGrid:
         }
 
 
-def _unavailable(bounds: Dict[str, float]) -> LandCoverGrid:
+def _unavailable(bounds: Dict[str, float], diag: str = "") -> LandCoverGrid:
     return LandCoverGrid(
         array=np.zeros((1, 1), dtype=np.uint8),
         min_lat=bounds["minLat"], max_lat=bounds["maxLat"],
         min_lon=bounds["minLon"], max_lon=bounds["maxLon"],
-        nrows=0, ncols=0, available=False,
+        nrows=0, ncols=0, available=False, diag=diag,
     )
+
+
+def _ca_bundle() -> Optional[str]:
+    """Path to a CA cert bundle for GDAL/libcurl HTTPS.
+
+    Slim container images often omit system CA certs, which breaks GDAL's
+    /vsicurl HTTPS even though Python's requests works (it bundles certifi).
+    Point GDAL at certifi's bundle so S3 reads succeed everywhere.
+    """
+    try:
+        import certifi
+        return certifi.where()
+    except Exception:
+        return None
 
 
 def _tile_name(lat0: int, lon0: int) -> str:
@@ -151,8 +166,8 @@ def fetch_landcover(bounds: Dict[str, float]) -> LandCoverGrid:
         import rasterio
         from rasterio.windows import from_bounds
         from rasterio.enums import Resampling
-    except Exception:
-        return _unavailable(bounds)
+    except Exception as e:
+        return _unavailable(bounds, f"rasterio import failed: {e}")
 
     # Local disk cache (helps within a warm instance; Cloud Run disk is ephemeral).
     cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
@@ -184,11 +199,20 @@ def fetch_landcover(bounds: Dict[str, float]) -> LandCoverGrid:
         "GDAL_HTTP_TIMEOUT": "30",
         "VSI_CACHE": "TRUE",
     }
+    # Slim images may lack system CA certs → GDAL HTTPS to S3 fails. Point
+    # GDAL/libcurl at certifi's bundle so /vsicurl works in any container.
+    ca = _ca_bundle()
+    if ca:
+        gdal_env["CURL_CA_BUNDLE"] = ca
+        gdal_env["GDAL_HTTP_CAINFO"] = ca
 
     any_data = False
+    tiles = _tiles_for_bounds(min_lat, max_lat, min_lon, max_lon)
+    last_err = ""
+    tiles_tried = 0
     try:
         with rasterio.Env(**gdal_env):
-            for lat0, lon0 in _tiles_for_bounds(min_lat, max_lat, min_lon, max_lon):
+            for lat0, lon0 in tiles:
                 url = "/vsicurl/" + _S3_BASE.format(tile=_tile_name(lat0, lon0))
                 t_w, t_s, t_e, t_n = lon0, lat0, lon0 + 3, lat0 + 3
                 ov_w, ov_e = max(min_lon, t_w), min(max_lon, t_e)
@@ -203,6 +227,7 @@ def fetch_landcover(bounds: Dict[str, float]) -> LandCoverGrid:
                 oh, ow = row1 - row0, col1 - col0
                 if oh <= 0 or ow <= 0:
                     continue
+                tiles_tried += 1
                 try:
                     with rasterio.open(url) as ds:
                         win = from_bounds(ov_w, ov_s, ov_e, ov_n, ds.transform)
@@ -211,14 +236,18 @@ def fetch_landcover(bounds: Dict[str, float]) -> LandCoverGrid:
                     out[row0:row1, col0:col1] = block
                     if block.any():
                         any_data = True
-                except Exception:
+                except Exception as e:
                     # Missing tile (ocean) or read error → leave as nodata.
+                    last_err = f"{_tile_name(lat0, lon0)}: {type(e).__name__}: {e}"
                     continue
-    except Exception:
-        return _unavailable(bounds)
+    except Exception as e:
+        return _unavailable(bounds, f"gdal env error: {type(e).__name__}: {e}")
 
     if not any_data:
-        return _unavailable(bounds)
+        return _unavailable(
+            bounds,
+            f"no data from {tiles_tried} tile(s); last error: {last_err or 'none (all ocean/empty)'}",
+        )
 
     if cache_path:
         try:

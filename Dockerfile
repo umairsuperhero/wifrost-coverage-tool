@@ -2,9 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Build tools needed by some Python packages (e.g. numpy, scipy wheels)
+# Build tools for some Python wheels, and ca-certificates so GDAL/libcurl
+# (rasterio /vsicurl reads of ESA WorldCover over HTTPS) can verify TLS.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies first (layer cached unless requirements.txt changes)
