@@ -121,8 +121,8 @@ def _draw_chrome(canvas, doc):
     canvas.setFont('Helvetica', 7)
     canvas.setFillColor(C_SLATE)
     canvas.drawString(36, 32,
-        "Model: Okumura-Hata + SRTM terrain. For pre-sales planning only. "
-        "Field validation recommended before deployment.")
+        "Model: Okumura-Hata + SRTM terrain + Deygout diffraction + WorldCover clutter. "
+        "Pre-sales planning only — field validation recommended. See Methodology page.")
 
     canvas.restoreState()
 
@@ -601,10 +601,10 @@ def generate_pdf_report(
             f"{model_name}  ({environment})"),
         _lr("Terrain Diffraction",
             "—", f"{diffraction_db:.1f} dB",
-            "Deygout multi-knife-edge (≤ 30 dB)"),
+            "Deygout multi-knife-edge (≤ 40 dB)"),
         _lr("Clutter Loss",
             "—", f"{clutter_db:.1f} dB",
-            f"Land-use clutter  ({environment})"),
+            f"Land-cover clutter  ({environment})"),
         _lr("Shadowing Margin",
             "—", f"{shadowing_margin_90_db:.1f} dB",
             "Log-normal, 90 % location probability"),
@@ -787,18 +787,65 @@ def generate_pdf_report(
     story.append(spec_table)
     story.append(Spacer(1, 15))
     
-    story.append(Paragraph("<b>Model Methodology & Assumptions</b>",
-                           _s('AssTitle', 10, C_NAVY, bold=True, space_after=4)))
+    # ══════════════════════════════════════════════════════════════════════════
+    # PAGE 6 — Propagation Methodology (how the model actually works)
+    # ══════════════════════════════════════════════════════════════════════════
+    story.append(PageBreak())
+    story.append(Paragraph("Propagation Methodology",
+                           _s('M6T', 18, C_NAVY, bold=True, leading=22)))
     story.append(Paragraph(
-        "1. <b>Empirical Propagation:</b> We employ the Okumura-Hata empirical path loss model, which is optimized for UHF frequencies. "
-        "A location-based clutter attenuation offset is applied based on the land environment chosen (Urban, Suburban, Rural).<br/>"
-        "2. <b>Terrain Profile Fading:</b> Knife-edge diffraction attenuation is modeled recursively using the Deygout algorithm (capped at 30 dB total attenuation). "
-        "Terrain profiles are built dynamically from SRTM 30m resolution topographic maps.<br/>"
-        "3. <b>Fading & Shadowing Margins:</b> Location probability is set to 90% (shadowing standard deviation is environment-dependent, typically 4–8 dB). "
-        "An additional system margin (default 18 dB) is included to protect against multi-path fading, vegetation growth, and RF noise.<br/>"
-        "4. <b>Pessimistic Scenario:</b> Incorporates a pessimistic clutter attenuation and a 95% location confidence margin, "
-        "offering a conservative baseline for high-reliability links.",
-        _s('AssContent', 8.5, C_DARK, leading=13)
-    ))
+        "Each point in the coverage area is evaluated with a full physical link budget rather "
+        "than a single range circle. The signal level (RSSI) at a location is:",
+        _s('M6S', 9, C_SLATE, leading=14)))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        "<b>RSSI = EIRP − Path&nbsp;Loss − Diffraction − Clutter + Rx&nbsp;Gain − Rx&nbsp;Loss + Sector&nbsp;Gain</b>",
+        _s('M6EQ', 9.5, C_NAVY, leading=15)))
+    story.append(Spacer(1, 10))
+
+    def _method(title, body):
+        story.append(Paragraph(f"<b>{title}</b>", _s('MmT', 9.5, C_NAVY, bold=True, space_after=2)))
+        story.append(Paragraph(body, _s('MmB', 8.5, C_DARK, leading=13)))
+        story.append(Spacer(1, 7))
+
+    _method("1 · Base path loss — Okumura-Hata (UHF 150–1500 MHz)",
+            "An empirical model tuned for the UHF TV bands. The effective base-station height is taken "
+            "above the receiver's ground elevation (clamped to the model's valid 10–200 m range) and the "
+            "open-area correction is capped at 20 dB. Over open water the model switches to a two-ray "
+            "ground-reflection calculation, which better represents long over-water links.")
+
+    _method("2 · Terrain &amp; radio horizon — SRTM 30 m + Deygout diffraction",
+            "The ground profile between transmitter and receiver is sampled from 30 m SRTM elevation data. "
+            "Earth curvature is added as a 4/3-effective-radius bulge so links beyond the geometric horizon "
+            "(≈ 4.12·(√h<sub>BTS</sub> + √h<sub>CPE</sub>) km) are correctly shadowed instead of treated as "
+            "line-of-sight. Obstructions are evaluated with the recursive Deygout multi-knife-edge method "
+            "(total diffraction capped at 40 dB), which only sub-divides the path at genuine obstacles.")
+
+    _method("3 · Land-cover clutter — ESA WorldCover 10 m",
+            "Excess loss from ground cover is read per-pixel from ESA WorldCover 2021 (10 m) and applied at "
+            "the receiver location — e.g. tree cover ≈ 14 dB, mangroves ≈ 12 dB, built-up ≈ 18 dB, open ground "
+            "≈ 2–4 dB, water 0 dB. The 'Auto' environment also derives the Hata correction (open / suburban / "
+            "urban / vegetation) from the dominant land cover, so results are not biased by a manual guess.")
+
+    _method("4 · Antenna pattern",
+            "Each sector applies a directional gain pattern (parabolic main lobe with a front-to-back floor) "
+            "about its azimuth; every point is served by its best sector. A single panel is directional, not "
+            "omnidirectional.")
+
+    _method("5 · Reliability margins &amp; classification",
+            "A log-normal shadowing margin for the chosen location probability (σ ≈ 4–8 dB by environment) and "
+            "a system margin (default ~18 dB, covering fading, foliage growth, ageing and interference) are "
+            "applied. A location is counted as covered when RSSI clears <b>receiver sensitivity + system "
+            "margin</b>; head-room above that sets the tier (Marginal / Good ≥ +10 dB / Excellent ≥ +20 dB). "
+            "The heatmap and the per-CPE link budget use this identical threshold. The Best / Realistic / "
+            "Conservative scenarios shift the margin by ±5 dB.")
+
+    story.append(Spacer(1, 3))
+    story.append(Paragraph(
+        "<b>Data sources &amp; validity.</b> Terrain: NASA SRTM 30 m (OpenTopography). Land cover: ESA "
+        "WorldCover 2021 10 m. CPE sensitivity is derived from the channel bandwidth as "
+        "−174 + 10·log₁₀(BW) + Noise&nbsp;Figure + Required&nbsp;SNR. Results are planning-grade estimates "
+        "valid for 150–1500 MHz; a field survey is recommended before commercial commitment.",
+        _s('M6V', 8, C_SLATE, leading=12)))
 
     doc.build(story, onFirstPage=_draw_chrome, onLaterPages=_draw_chrome, canvasmaker=NumberedCanvas)
