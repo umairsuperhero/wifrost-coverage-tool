@@ -44,6 +44,25 @@ WORLDCOVER_CLASS_NAME: Dict[int, str] = {
     80: "Water", 90: "Wetland", 95: "Mangroves", 100: "Moss / lichen",
 }
 
+# WorldCover class → Okumura-Hata environment type (drives the open/suburban/
+# urban correction + shadowing sigma). Note we deliberately map water to "open"
+# rather than "open_water": the two-ray water model would otherwise be applied
+# to land cells in mixed coastal scenes. Pick open_water manually for pure
+# over-water links.
+WORLDCOVER_ENVIRONMENT: Dict[int, str] = {
+    50: "urban",
+    10: "vegetation_dense",
+    95: "vegetation_dense",
+    20: "vegetation_light",
+    90: "vegetation_light",
+    30: "open",
+    40: "open",
+    60: "open",
+    70: "open",
+    80: "open",
+    100: "open",
+}
+
 _S3_BASE = ("https://esa-worldcover.s3.eu-central-1.amazonaws.com/"
             "v200/2021/map/ESA_WorldCover_10m_2021_v200_{tile}_Map.tif")
 
@@ -103,6 +122,29 @@ class LandCoverGrid:
             WORLDCOVER_CLASS_NAME.get(int(v), str(int(v))): round(c / total * 100.0, 1)
             for v, c in zip(vals.tolist(), counts.tolist())
         }
+
+    def recommend_environment(self, default: str = "suburban") -> str:
+        """Area-weighted dominant Okumura-Hata environment from land cover.
+
+        Sums the area of each class's mapped environment and returns the largest,
+        so the model's open/suburban/urban correction matches what's actually on
+        the ground instead of relying on an error-prone manual pick. Returns
+        ``default`` when no land-cover data is available.
+        """
+        if not self.available:
+            return default
+        valid = self.array[self.array != 0]
+        if valid.size == 0:
+            return default
+        vals, counts = np.unique(valid, return_counts=True)
+        env_area: Dict[str, int] = {}
+        for v, c in zip(vals.tolist(), counts.tolist()):
+            env = WORLDCOVER_ENVIRONMENT.get(int(v))
+            if env:
+                env_area[env] = env_area.get(env, 0) + int(c)
+        if not env_area:
+            return default
+        return max(env_area.items(), key=lambda kv: kv[1])[0]
 
 
 def _unavailable(bounds: Dict[str, float], diag: str = "") -> LandCoverGrid:

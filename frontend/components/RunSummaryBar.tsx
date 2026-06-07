@@ -14,6 +14,7 @@ interface RunSummaryBarProps {
   systemMarginDb?: number;
   terrainLoaded?: boolean;
   landcoverLoaded?: boolean;
+  environmentAuto?: boolean;
 }
 
 const MODEL_LABEL: Record<string, string> = {
@@ -70,7 +71,7 @@ function DataChip({ label, on }: { label: string; on: boolean }) {
 export default function RunSummaryBar({
   runCount, lastRunAt, isLoading, projectName, btsName,
   frequencyMhz, model, environment, eirpDbm, systemMarginDb,
-  terrainLoaded, landcoverLoaded,
+  terrainLoaded, landcoverLoaded, environmentAuto,
 }: RunSummaryBarProps) {
   // Re-render every 15 s so the "x ago" label stays fresh.
   const [, setTick] = useState(0);
@@ -112,7 +113,11 @@ export default function RunSummaryBar({
             />
           )}
           {environment && (
-            <Chip icon={<Trees className="w-3.5 h-3.5" />} label="Env" value={ENV_LABEL[environment] ?? environment} />
+            <Chip
+              icon={<Trees className="w-3.5 h-3.5" />}
+              label="Env"
+              value={`${ENV_LABEL[environment] ?? environment}${environmentAuto ? " (auto)" : ""}`}
+            />
           )}
           {typeof eirpDbm === "number" && (
             <Chip icon={<Gauge className="w-3.5 h-3.5" />} label="EIRP" value={`${eirpDbm.toFixed(1)} dBm`} />

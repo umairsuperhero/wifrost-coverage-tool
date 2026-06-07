@@ -319,7 +319,13 @@ def simulate(req: SimulateRequest):
     ec.receiver_sensitivity_dbm = req.cpe_sensitivity
     ec.antenna_height_default_m = req.cpe_height
 
-    env = req.environment
+    # Environment: "auto" resolves to the area-weighted dominant land-cover
+    # environment so the Hata correction matches the ground instead of relying
+    # on an error-prone manual pick. Falls back to suburban without land cover.
+    if (req.environment or "").lower() == "auto":
+        env = landcover_grid.recommend_environment(default="suburban")
+    else:
+        env = req.environment
 
     # Generate standard coverage grid
     resolution_m = 100.0
@@ -503,7 +509,9 @@ def simulate(req: SimulateRequest):
             "terrain_loaded": not terrain_grid.is_flat,
             "landcover_loaded": bool(getattr(landcover_grid, "available", False)),
             "landcover_summary": landcover_grid.class_histogram() if getattr(landcover_grid, "available", False) else {},
-            "landcover_diag": getattr(landcover_grid, "diag", "")
+            "landcover_diag": getattr(landcover_grid, "diag", ""),
+            "environment_used": env,
+            "environment_auto": (req.environment or "").lower() == "auto"
         },
         "plain_english_result": plain_english,
         "three_scenarios": {
@@ -552,7 +560,13 @@ def cpe_analysis(req: CpeAnalysisRequest):
     # Land cover for per-pixel clutter — same source the heatmap uses, so the
     # CPE link budget and the map agree cell-for-cell.
     landcover_grid = fetch_landcover(bounds)
-    env_clutter_db = float(ENVIRONMENT_CLUTTER_LOSS.get(req.environment, 3))
+
+    # Resolve "auto" environment from land cover (matches the simulate endpoint).
+    if (req.environment or "").lower() == "auto":
+        env = landcover_grid.recommend_environment(default="suburban")
+    else:
+        env = req.environment
+    env_clutter_db = float(ENVIRONMENT_CLUTTER_LOSS.get(env, 3))
 
     cpe_sites = [s for s in req.sites if not s["is_bts_candidate"]]
     cpe_results = []
@@ -597,11 +611,11 @@ def cpe_analysis(req: CpeAnalysisRequest):
                 loss_db, _, _ = terrain_aware_loss(
                     bts["latitude"], bts["longitude"], req.bts_height,
                     s["latitude"], s["longitude"], cpe_height,
-                    req.frequency_mhz, terrain_grid, req.environment,
+                    req.frequency_mhz, terrain_grid, env,
                     clutter_db_override=cpe_clutter_db
                 )
             else:
-                loss_db = okumura_hata(d_km, req.frequency_mhz, req.bts_height, cpe_height, req.environment)
+                loss_db = okumura_hata(d_km, req.frequency_mhz, req.bts_height, cpe_height, env)
 
             # Sector gain — pick best-serving sector
             pt_bearing = calc_bearing(bts["latitude"], bts["longitude"],
@@ -665,10 +679,12 @@ def cpe_analysis(req: CpeAnalysisRequest):
             "covered_cpes": covered_count,
             "coverage_pct": coverage_pct,
             "terrain_loaded": not terrain_grid.is_flat,
-            "landcover_loaded": bool(getattr(landcover_grid, "available", False))
+            "landcover_loaded": bool(getattr(landcover_grid, "available", False)),
+            "environment_used": env
         },
         "terrain_loaded": not terrain_grid.is_flat,
-        "landcover_loaded": bool(getattr(landcover_grid, "available", False))
+        "landcover_loaded": bool(getattr(landcover_grid, "available", False)),
+        "environment_used": env
     }
 
 @app.post("/api/generate-report")

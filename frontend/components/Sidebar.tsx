@@ -10,14 +10,16 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
 const SECTOR_COLORS = ["#3B82F6", "#22C55E", "#F59E0B"];
 
-// Rx sensitivity = thermal noise floor + NF + SNR_min
-// kTB = -174 dBm/Hz + 10*log10(BW_Hz), NF = 8 dB, SNR_min = 3 dB
-const BW_SENSITIVITY: Record<number, number> = {
-  6:  -95,  // -174 + 67.78 + 8 + 3 = -95.2 dBm
-  12: -92,  // -174 + 70.79 + 8 + 3 = -92.2 dBm  ← default (2 × 6 MHz TV channels)
-  18: -90,  // -174 + 72.55 + 8 + 3 = -90.5 dBm
-  24: -89,  // -174 + 73.80 + 8 + 3 = -89.2 dBm
-};
+// Rx sensitivity from first principles:
+//   sens(dBm) = -174 (kT/Hz) + 10·log10(BW_Hz) + NoiseFigure + RequiredSNR
+// Defaults: 12 MHz channel (2 × 6 MHz TV channels), NF 6 dB, SNR 3 dB → -94.2 dBm.
+const DEFAULT_NOISE_FIGURE_DB = 6;
+const DEFAULT_REQUIRED_SNR_DB = 3;
+function computeSensitivityDbm(bwMhz: number, nfDb: number, snrDb: number): number {
+  if (!bwMhz || bwMhz <= 0) return -94;
+  const thermal = -174 + 10 * Math.log10(bwMhz * 1e6);
+  return Math.round((thermal + nfDb + snrDb) * 10) / 10;
+}
 
 interface TooltipProps {
   content: string;
@@ -99,9 +101,13 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
   const [antennaGainDbi, setAntennaGainDbi] = useState<number>(13.0);
   const [cableLossDb, setCableLossDb] = useState<number>(0.0);
   
-  // Channel bandwidth → auto-computed Rx sensitivity
+  // Channel bandwidth + NF + SNR → computed Rx sensitivity
   const [channelBwMhz, setChannelBwMhz] = useState<number>(12);
-  const [cpeSensitivity, setCpeSensitivity] = useState<number>(BW_SENSITIVITY[12]);
+  const [noiseFigureDb, setNoiseFigureDb] = useState<number>(DEFAULT_NOISE_FIGURE_DB);
+  const [requiredSnrDb, setRequiredSnrDb] = useState<number>(DEFAULT_REQUIRED_SNR_DB);
+  const [cpeSensitivity, setCpeSensitivity] = useState<number>(
+    computeSensitivityDbm(12, DEFAULT_NOISE_FIGURE_DB, DEFAULT_REQUIRED_SNR_DB)
+  );
   const [cpeGainDbi, setCpeGainDbi] = useState<number>(10.0);
   const [cpeCableLossDb, setCpeCableLossDb] = useState<number>(0.0);
 
@@ -109,7 +115,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
   const [coverageProbability, setCoverageProbability] = useState<string>("90%");
   const [modelType, setModelType] = useState<string>("terrain_aware");
   const [srtmKey, setSrtmKey] = useState<string>("");
-  const [environment, setEnvironment] = useState<string>("suburban");
+  const [environment, setEnvironment] = useState<string>("auto");
 
   const [rfPreset, setRfPreset] = useState<string>("manual");
   const [advancedMode, setAdvancedMode] = useState(() => {
@@ -178,7 +184,8 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
     setEnvironment(p.environment);
     setBtsHeight(p.btsHeight);
     setCpeHeight(p.cpeHeight);
-    setCpeSensitivity(p.cpeSensitivity);
+    // Sensitivity stays driven by channel BW / NF / SNR — presets no longer
+    // hardcode it (that was overriding the 12 MHz value with -104).
     setSystemMarginDb(p.systemMargin);
     setTxPowerDbm(p.txPower);
     setAntennaGainDbi(p.antennaGain);
@@ -210,7 +217,8 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
         setTxPowerDbm(bts.tx_power_dbm || 23.0);
         setAntennaGainDbi(bts.antenna_gain_dbi || 13.0);
         setCableLossDb(bts.cable_loss_db || 0.0);
-        setCpeSensitivity(BW_SENSITIVITY[12]); // use calculated default, not datasheet value
+        // Sensitivity is computed from channel BW / NF / SNR (see effect below),
+        // not taken from the datasheet field — keeps it consistent with the BW.
         setCpeGainDbi(cpe.antenna_gain_dbi || 10.0);
         setCpeCableLossDb(cpe.cable_loss_db || 0.0);
         setHpbw(bts.beamwidth_h_deg || 65.0);
@@ -222,10 +230,10 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
       });
   }, []);
 
-  // Auto-update sensitivity when channel bandwidth changes
+  // Recompute sensitivity whenever bandwidth, noise figure, or required SNR change.
   useEffect(() => {
-    setCpeSensitivity(BW_SENSITIVITY[channelBwMhz]);
-  }, [channelBwMhz]);
+    setCpeSensitivity(computeSensitivityDbm(channelBwMhz, noiseFigureDb, requiredSnrDb));
+  }, [channelBwMhz, noiseFigureDb, requiredSnrDb]);
 
   // Notify parent whenever live sector config changes (keeps map wedges in sync without re-sim)
   useEffect(() => {
@@ -513,7 +521,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
                 Clutter Environment
-                <Tooltip content="Clutter introduces clutter loss: Open (3 dB), Open Water (0 dB), Suburban (8 dB), Light Vegetation (6 dB), Dense Vegetation (15 dB), Port/Industrial (12 dB), Urban (18 dB)." />
+                <Tooltip content="Auto derives the environment from ESA WorldCover land cover for the area — recommended, avoids biasing results with a wrong manual pick. Per-pixel clutter is always applied from land cover when available; this setting controls the Hata correction type. Manual: Open (3 dB), Open Water (0 dB), Suburban (8 dB), Light Vegetation (6 dB), Dense Vegetation (15 dB), Port/Industrial (12 dB), Urban (18 dB)." />
               </label>
               <select
                 value={environment}
@@ -523,6 +531,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                 }}
                 className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
               >
+                <option value="auto">Auto (from land cover) — recommended</option>
                 <option value="open">Open / Rural Flat</option>
                 <option value="open_water">Open Water / Sea</option>
                 <option value="suburban">Suburban / Trees & Houses</option>
@@ -531,6 +540,11 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                 <option value="port_industrial">Port / Industrial</option>
                 <option value="urban">Urban / Tall Structures</option>
               </select>
+              {environment === "auto" && (
+                <p className="text-[9px] text-slate-600">
+                  The model picks the dominant land-cover environment for the area at run time.
+                </p>
+              )}
             </div>
           )}
 
@@ -760,10 +774,11 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                     ))}
                   </div>
                   <p className="text-[9px] text-slate-600">
-                    Sensitivity: {cpeSensitivity} dBm · kTB + 8 dB NF + 3 dB SNR
+                    Computed Rx sensitivity: <span className="text-blue-400 font-semibold">{cpeSensitivity} dBm</span>
+                    {" "}· −174 + 10·log₁₀(BW) + {noiseFigureDb} dB NF + {requiredSnrDb} dB SNR
                   </p>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <label className="text-[10px] text-slate-500 uppercase">CPE Height (m)</label>
                     <input
@@ -777,17 +792,33 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase">Rx Sensitivity (dBm)</label>
+                    <label className="text-[10px] text-slate-500 uppercase">Noise Fig (dB)</label>
                     <input
                       type="number"
-                      value={cpeSensitivity}
+                      value={noiseFigureDb}
                       onChange={(e) => {
-                        setCpeSensitivity(Number(e.target.value));
+                        setNoiseFigureDb(Number(e.target.value));
                         setRfPreset("manual");
                       }}
                       className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
                     />
                   </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 uppercase">Req. SNR (dB)</label>
+                    <input
+                      type="number"
+                      value={requiredSnrDb}
+                      onChange={(e) => {
+                        setRequiredSnrDb(Number(e.target.value));
+                        setRfPreset("manual");
+                      }}
+                      className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between px-2 py-1.5 bg-slate-950/40 border border-slate-850 rounded">
+                  <span className="text-[10px] text-slate-500 uppercase">Rx Sensitivity</span>
+                  <span className="text-xs font-bold text-white">{cpeSensitivity} dBm</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">

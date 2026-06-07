@@ -57,6 +57,8 @@ export interface SimulationStats {
   terrain_loaded?: boolean;
   landcover_loaded?: boolean;
   landcover_summary?: Record<string, number>;
+  environment_used?: string;
+  environment_auto?: boolean;
 }
 
 export interface ScenarioStats {
@@ -157,7 +159,8 @@ export default function Home() {
   const [liveSector, setLiveSector] = useState<{ azimuths: number[]; hpbw: number }>({ azimuths: [0], hpbw: 65 });
 
   // Map Toolbar & Premium Controls States
-  const [mapMode, setMapMode] = useState<"normal" | "measure">("normal");
+  const [mapMode, setMapMode] = useState<"normal" | "measure" | "addcpe">("normal");
+  const [manualCpeCount, setManualCpeCount] = useState<number>(0);
   const [hoverPoint, setHoverPoint] = useState<[number, number] | null>(null);
   const [mapOpacity, setMapOpacity] = useState<number>(0.45);
   const [mapTheme, setMapTheme] = useState<"dark" | "satellite" | "street">("dark");
@@ -278,12 +281,19 @@ export default function Home() {
         bts_height: params.bts_height,
         cpe_height: params.cpe_height,
         cpe_sensitivity: params.cpe_sensitivity,
+        // Full RF params kept so ad-hoc CPE re-analysis (P2MP) uses identical inputs.
+        tx_power_dbm: params.tx_power_dbm,
+        antenna_gain_dbi: params.antenna_gain_dbi,
+        cable_loss_db: params.cable_loss_db,
+        rx_gain_dbi: params.rx_gain_dbi,
+        rx_cable_loss_db: params.rx_cable_loss_db,
+        rx_sensitivity_dbm: params.rx_sensitivity_dbm,
         sector_azimuths: params.sector_azimuths,
         hpbw_deg: params.hpbw_deg,
         vpbw_deg: params.vpbw_deg,
         front_to_back_db: params.front_to_back_db,
       };
-      
+
       setActiveSimulationParams(simulationParamsContext);
       setSimulationResults(simRes.data);
       setSelectedBtsIndex(params.site_index);
@@ -403,6 +413,77 @@ export default function Home() {
       }, updatedSites);
     }
   }, [parsedData.sites, activeSimulationParams, handleSimulate, showToast]);
+
+  // Re-run ONLY the CPE link budget (the coverage grid depends on the BTS, which
+  // is unchanged) for a given sites list — used for ad-hoc CPE drops (P2MP).
+  const runCpeAnalysisOnly = useCallback(async (sitesForAnalysis: Site[]) => {
+    const p = activeSimulationParams;
+    if (!p) return;
+    const cpeRes = await axios.post(`${API_BASE}/api/cpe-analysis`, {
+      bts_index: p.site_index,
+      sites: sitesForAnalysis,
+      frequency_mhz: p.frequency_mhz,
+      model: p.model,
+      environment: p.environment,
+      bts_height: p.bts_height,
+      tx_power_dbm: p.tx_power_dbm ?? 23.0,
+      antenna_gain_dbi: p.antenna_gain_dbi ?? 13.0,
+      cable_loss_db: p.cable_loss_db ?? 1.5,
+      rx_gain_dbi: p.rx_gain_dbi ?? 10.0,
+      rx_cable_loss_db: p.rx_cable_loss_db ?? 0.5,
+      rx_sensitivity_dbm: p.rx_sensitivity_dbm ?? p.cpe_sensitivity ?? -94.0,
+      system_margin_db: p.system_margin_db,
+      sector_azimuths: p.sector_azimuths ?? [0],
+      hpbw_deg: p.hpbw_deg ?? 65.0,
+      front_to_back_db: p.front_to_back_db ?? 25.0,
+    });
+    setCpeResults(cpeRes.data.cpe_results);
+    return cpeRes.data.cpe_results as CpeResult[];
+  }, [activeSimulationParams]);
+
+  // Click-to-drop an ad-hoc CPE on the map, then re-run the P2MP link budget.
+  const handleAddCpe = useCallback(async (lat: number, lng: number) => {
+    if (!activeSimulationParams) {
+      showToast("Run a simulation first, then drop CPE sites to analyze.", "warning");
+      return;
+    }
+    const n = manualCpeCount + 1;
+    setManualCpeCount(n);
+    const newCpe: Site = {
+      name: `Manual CPE ${n}`,
+      latitude: Number(lat.toFixed(6)),
+      longitude: Number(lng.toFixed(6)),
+      is_bts_candidate: false,
+      height_m: activeSimulationParams.cpe_height ?? 10.0,
+      site_type: "CPE",
+    };
+    const updatedSites = [...parsedData.sites, newCpe];
+    setParsedData((prev) => ({ ...prev, sites: updatedSites }));
+    try {
+      const results = await runCpeAnalysisOnly(updatedSites);
+      const added = results?.find((c) => c.name === newCpe.name);
+      if (added) {
+        await handleSelectCpe(added);
+        showToast(`${newCpe.name}: ${added.status} (${added.rssi_dbm} dBm)`, "success");
+      }
+    } catch (err) {
+      console.error("Failed to analyze dropped CPE:", err);
+      showToast("Failed to analyze the dropped CPE.", "error");
+    }
+  }, [activeSimulationParams, manualCpeCount, parsedData.sites, runCpeAnalysisOnly, handleSelectCpe, showToast]);
+
+  // Remove all ad-hoc (manually dropped) CPEs and re-run the link budget.
+  const handleClearManualCpes = useCallback(async () => {
+    const cleaned = parsedData.sites.filter((s) => !/^Manual CPE /.test(s.name));
+    setParsedData((prev) => ({ ...prev, sites: cleaned }));
+    setManualCpeCount(0);
+    try {
+      await runCpeAnalysisOnly(cleaned);
+      showToast("Cleared manually-added CPE sites.", "success");
+    } catch {
+      /* non-fatal */
+    }
+  }, [parsedData.sites, runCpeAnalysisOnly, showToast]);
 
   useEffect(() => {
     if (measurePoints.length === 2) {
@@ -601,6 +682,7 @@ export default function Home() {
                     : null
                 }
                 onMoveBts={handleMoveBts}
+                onAddCpe={handleAddCpe}
                 mapMode={mapMode}
                 setMapMode={setMapMode}
                 hoverPoint={hoverPoint}
@@ -640,7 +722,8 @@ export default function Home() {
                     }
                     frequencyMhz={activeSimulationParams?.frequency_mhz}
                     model={activeSimulationParams?.model}
-                    environment={activeSimulationParams?.environment}
+                    environment={simulationResults.stats.environment_used ?? activeSimulationParams?.environment}
+                    environmentAuto={simulationResults.stats.environment_auto}
                     eirpDbm={activeSimulationParams?.eirp_dbm}
                     systemMarginDb={activeSimulationParams?.system_margin_db}
                     terrainLoaded={simulationResults.stats.terrain_loaded}
@@ -665,6 +748,29 @@ export default function Home() {
                     activeScenarioName={activeScenario}
                     onScenarioChange={setActiveScenario}
                   />
+
+                  {/* P2MP / manual-CPE controls */}
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <button
+                      onClick={() => setMapMode(mapMode === "addcpe" ? "normal" : "addcpe")}
+                      className={`inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-lg border transition ${
+                        mapMode === "addcpe"
+                          ? "bg-blue-600 border-blue-500 text-white"
+                          : "bg-slate-900/60 border-slate-700 text-slate-300 hover:border-slate-600"
+                      }`}
+                      title="Toggle add-CPE mode, then click the map to drop client sites for point-to-multipoint analysis"
+                    >
+                      📍 {mapMode === "addcpe" ? "Click map to drop CPE…" : "Add CPE (P2MP)"}
+                    </button>
+                    {manualCpeCount > 0 && (
+                      <button
+                        onClick={handleClearManualCpes}
+                        className="text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-red-300 hover:border-red-500/40 transition"
+                      >
+                        Clear {manualCpeCount} manual CPE{manualCpeCount > 1 ? "s" : ""}
+                      </button>
+                    )}
+                  </div>
 
                   {/* CPE Summary Bar — only when CPE results exist */}
                   {cpeResults.length > 0 && (

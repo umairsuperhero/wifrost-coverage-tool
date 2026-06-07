@@ -3,7 +3,7 @@
 import React, { useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON, Polygon, Polyline, CircleMarker, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
-import { MousePointer, Ruler } from "lucide-react";
+import { MousePointer, Ruler, MapPin } from "lucide-react";
 
 // Custom Leaflet CSS DivIcons to enable modern styling
 const getBtsIcon = (isActive: boolean) => {
@@ -123,8 +123,9 @@ interface MapInnerProps {
   activeScenario?: "best" | "realistic" | "conservative";
   activeThreshold?: number;
   onMoveBts?: (index: number, lat: number, lng: number) => void;
-  mapMode?: "normal" | "measure";
-  setMapMode?: (mode: "normal" | "measure") => void;
+  onAddCpe?: (lat: number, lng: number) => void;
+  mapMode?: "normal" | "measure" | "addcpe";
+  setMapMode?: (mode: "normal" | "measure" | "addcpe") => void;
   hoverPoint?: [number, number] | null;
   opacity?: number;
   setOpacity?: (opacity: number) => void;
@@ -172,6 +173,7 @@ export default function MapInner({
   activeScenario = "realistic",
   activeThreshold = -89.0,
   onMoveBts,
+  onAddCpe,
   mapMode = "normal",
   setMapMode,
   hoverPoint,
@@ -237,6 +239,8 @@ export default function MapInner({
           } else {
             setMeasurePoints(newPoints);
           }
+        } else if (mapMode === "addcpe" && onAddCpe) {
+          onAddCpe(e.latlng.lat, e.latlng.lng);
         }
       }
     });
@@ -480,7 +484,21 @@ export default function MapInner({
         >
           <Ruler className="w-4 h-4" />
         </button>
-        
+        <button
+          onClick={() => {
+            if (setMapMode) setMapMode("addcpe");
+            if (setMeasurePoints) setMeasurePoints([]);
+          }}
+          title="Add CPE — click the map to drop a client site (P2MP)"
+          className={`p-2 rounded-md transition ${
+            mapMode === "addcpe"
+              ? "bg-blue-600 text-white font-bold"
+              : "text-slate-400 hover:text-white hover:bg-slate-800"
+          }`}
+        >
+          <MapPin className="w-4 h-4" />
+        </button>
+
         <div className="border-t border-slate-800 my-1"></div>
         
         {/* Theme Select Switcher */}
