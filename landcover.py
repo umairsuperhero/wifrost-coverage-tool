@@ -266,6 +266,11 @@ def fetch_landcover(bounds: Dict[str, float]) -> LandCoverGrid:
                 col1 = int(round((ov_e - min_lon) / lon_span * ncols))
                 row0 = int(round((max_lat - ov_n) / lat_span * nrows))
                 row1 = int(round((max_lat - ov_s) / lat_span * nrows))
+                
+                # Safety clamp against floating point edge cases
+                col0, col1 = max(0, col0), min(ncols, col1)
+                row0, row1 = max(0, row0), min(nrows, row1)
+                
                 oh, ow = row1 - row0, col1 - col0
                 if oh <= 0 or ow <= 0:
                     continue

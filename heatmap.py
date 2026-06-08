@@ -179,7 +179,7 @@ def deygout_loss_np(d_arr: np.ndarray, e_arr: np.ndarray,
     d2_m = d2 * 1000.0
 
     denom = lambda_m * d1_m * d2_m
-    v = np.zeros_like(h_above)
+    v = np.full_like(h_above, -9999.0)
     valid = denom > 0
     v[valid] = h_above[valid] * np.sqrt(2.0 * (d1_m[valid] + d2_m[valid]) / denom[valid])
 

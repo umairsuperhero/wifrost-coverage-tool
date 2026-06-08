@@ -616,6 +616,7 @@ def cpe_analysis(req: CpeAnalysisRequest):
                 )
             else:
                 loss_db = okumura_hata(d_km, req.frequency_mhz, req.bts_height, cpe_height, env)
+                loss_db += cpe_clutter_db if cpe_clutter_db is not None else env_clutter_db
 
             # Sector gain — pick best-serving sector
             pt_bearing = calc_bearing(bts["latitude"], bts["longitude"],
@@ -738,6 +739,7 @@ def generate_report(req: GenerateReportRequest):
         bounds = build_bounding_box(sim_params.sites, sim_params.polygons, sim_params.lines)
         srtm_key = sim_params.srtm_key or os.getenv("OPENTOPOGRAPHY_API_KEY", "")
         terrain_grid = fetch_srtm(bounds, srtm_key)
+        landcover_grid = fetch_landcover(bounds)
         
         eb = WifrostBTS()
         eb.antenna_height_default_m = sim_params.bts_height
@@ -758,7 +760,8 @@ def generate_report(req: GenerateReportRequest):
             resolution_m=100.0,
             model=sim_params.model,
             environment=env,
-            bts_height_override=sim_params.bts_height
+            bts_height_override=sim_params.bts_height,
+            landcover_grid=landcover_grid
         )
     
     # Calculate link metrics at cell edge
