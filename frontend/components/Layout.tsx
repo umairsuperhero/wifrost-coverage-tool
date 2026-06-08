@@ -8,9 +8,9 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-black">
+    <div className="flex flex-col h-screen overflow-hidden bg-black text-white relative">
       {/* Top Header Bar */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-black/30 backdrop-blur-2xl z-10">
+      <header className="absolute top-0 left-0 right-0 flex items-center justify-between px-6 py-4 border-b border-white/5 bg-black/40 backdrop-blur-2xl z-50">
         <div className="flex items-center space-x-3">
           <div className="p-2 bg-blue-600 rounded-lg text-white">
             <Wifi className="w-6 h-6 animate-pulse" />
@@ -40,7 +40,7 @@ export default function Layout({ children }: LayoutProps) {
       </header>
 
       {/* Main Container */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex-1 w-full h-full relative">
         {children}
       </div>
     </div>
