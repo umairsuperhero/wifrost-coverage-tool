@@ -68,8 +68,8 @@ export default function WhatsNewButton() {
       </button>
 
       {isOpen && mounted && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="relative w-full max-w-2xl bg-black/60 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="relative w-full max-w-2xl bg-black/80 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-300">
             {/* Header */}
             <div className="flex items-start justify-between px-6 py-5 border-b border-white/5">
               <div>
