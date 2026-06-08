@@ -15,31 +15,31 @@ export default function CpeSummaryBar({ cpeResults }: CpeSummaryBarProps) {
   const pct       = total > 0 ? Math.round((reliable / total) * 100) : 0;
 
   return (
-    <div className="bg-slate-900/60 rounded-xl border border-slate-800 px-5 py-3">
+    <div className="bg-black/40 backdrop-blur-3xl rounded-xl border border-white/5 px-5 py-3">
       <div className="flex items-center gap-4 flex-wrap">
-        <span className="text-sm font-semibold text-white">CPE Coverage</span>
+        <span className="text-sm font-medium text-white/90">CPE Coverage</span>
         <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-xs text-slate-300">
-            <span className="w-2 h-2 rounded-full inline-block mr-1 bg-emerald-500" />
+          <span className="text-[11px] uppercase tracking-wider text-white/60">
+            <span className="w-1.5 h-1.5 rounded-full inline-block mr-1.5 bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
             {excellent} Reliable
           </span>
-          <span className="text-xs text-slate-300">
-            <span className="w-2 h-2 rounded-full inline-block mr-1 bg-amber-500" />
+          <span className="text-[11px] uppercase tracking-wider text-white/60">
+            <span className="w-1.5 h-1.5 rounded-full inline-block mr-1.5 bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
             {marginal} Marginal
           </span>
-          <span className="text-xs text-slate-300">
-            <span className="w-2 h-2 rounded-full inline-block mr-1 bg-red-500" />
+          <span className="text-[11px] uppercase tracking-wider text-white/60">
+            <span className="w-1.5 h-1.5 rounded-full inline-block mr-1.5 bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.8)]" />
             {failed} No Signal
           </span>
         </div>
       </div>
-      <div className="flex items-center gap-2 mt-2">
-        <div className="flex-1 flex rounded-full overflow-hidden h-2">
-          <div className="bg-emerald-500" style={{ width: `${(excellent / total) * 100}%` }} />
-          <div className="bg-amber-500"   style={{ width: `${(marginal / total) * 100}%` }} />
-          <div className="bg-red-500"     style={{ width: `${(failed / total) * 100}%` }} />
+      <div className="flex items-center gap-3 mt-2.5">
+        <div className="flex-1 flex rounded-full overflow-hidden h-1.5 bg-white/5">
+          <div className="bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" style={{ width: `${(excellent / total) * 100}%` }} />
+          <div className="bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]"   style={{ width: `${(marginal / total) * 100}%` }} />
+          <div className="bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.8)]"     style={{ width: `${(failed / total) * 100}%` }} />
         </div>
-        <span className="text-xs text-slate-300 whitespace-nowrap">{pct}% Reliable</span>
+        <span className="text-[11px] uppercase tracking-wider font-semibold text-white/80 whitespace-nowrap">{pct}% Reliable</span>
       </div>
     </div>
   );

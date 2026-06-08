@@ -44,10 +44,10 @@ function timeAgo(date: Date): string {
 
 function Chip({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-slate-300 bg-slate-800/60 border border-slate-700/60 rounded-lg px-2.5 py-1">
-      <span className="text-slate-400">{icon}</span>
-      <span className="text-slate-500">{label}</span>
-      <span className="font-semibold text-white">{value}</span>
+    <span className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-white/70 bg-white/5 border border-white/10 rounded-full px-3 py-1">
+      <span className="text-blue-400/80">{icon}</span>
+      <span className="text-white/40">{label}</span>
+      <span className="font-medium tracking-normal normal-case text-white/90">{value}</span>
     </span>
   );
 }
@@ -55,14 +55,14 @@ function Chip({ icon, label, value }: { icon: React.ReactNode; label: string; va
 function DataChip({ label, on }: { label: string; on: boolean }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 text-xs rounded-lg px-2.5 py-1 border ${
+      className={`inline-flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-semibold rounded-full px-3 py-1 border transition-all ${
         on
-          ? "text-emerald-300 bg-emerald-500/10 border-emerald-500/30"
-          : "text-slate-400 bg-slate-800/60 border-slate-700/60"
+          ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20 shadow-[0_0_8px_rgba(16,185,129,0.15)]"
+          : "text-white/40 bg-white/5 border-white/10"
       }`}
       title={on ? `${label} data loaded for this run` : `${label} unavailable — using fallback assumption`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${on ? "bg-emerald-400" : "bg-slate-500"}`} />
+      <span className={`h-1.5 w-1.5 rounded-full ${on ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-white/20"}`} />
       {label} {on ? "on" : "off"}
     </span>
   );
@@ -81,23 +81,23 @@ export default function RunSummaryBar({
   }, []);
 
   return (
-    <div className="bg-slate-900/70 rounded-xl border border-slate-800 px-5 py-3">
+    <div className="bg-black/40 backdrop-blur-3xl rounded-xl border border-white/5 px-5 py-3">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <span className={`relative flex h-2.5 w-2.5`}>
             {isLoading && (
               <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75 animate-ping" />
             )}
-            <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isLoading ? "bg-amber-400" : "bg-emerald-400"}`} />
+            <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isLoading ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" : "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"}`} />
           </span>
-          <span className="text-sm font-semibold text-white">
+          <span className="text-sm font-medium text-white/90">
             {isLoading ? "Running simulation…" : `Run #${runCount}`}
           </span>
           {!isLoading && lastRunAt && (
-            <span className="text-xs text-slate-500">· {timeAgo(lastRunAt)}</span>
+            <span className="text-xs text-white/40">· {timeAgo(lastRunAt)}</span>
           )}
           {projectName && (
-            <span className="text-xs text-slate-400 truncate max-w-[180px]">· {projectName}</span>
+            <span className="text-xs text-white/40 truncate max-w-[180px]">· {projectName}</span>
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">

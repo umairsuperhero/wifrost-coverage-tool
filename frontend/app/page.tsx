@@ -643,12 +643,12 @@ export default function Home() {
       />
 
       {/* Right Dashboard Area */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#0F1117]">
+      <main className="flex-1 flex flex-col h-full overflow-hidden bg-black">
         {parsedData.sites.length === 0 ? (
           /* Empty State */
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-400">
-            <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl flex items-center justify-center mb-4">
-              <Compass className="w-12 h-12 text-blue-500 animate-spin-slow" />
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-white/40">
+            <div className="p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center mb-4 shadow-xl">
+              <Compass className="w-12 h-12 text-blue-500 animate-spin-slow drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
             </div>
             <h2 className="text-xl font-bold text-white mb-1">No Project Loaded</h2>
             <p className="text-sm text-slate-500 max-w-sm">
@@ -659,7 +659,7 @@ export default function Home() {
           /* Dashboard Layout */
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Map View — wedges update live from compass rose */}
-            <div className="h-[56%] w-full border-b border-slate-800 relative min-h-[340px]">
+            <div className="h-[56%] w-full border-b border-white/5 relative min-h-[340px]">
               <MapView
                 sites={parsedData.sites}
                 polygons={parsedData.polygons}
@@ -753,10 +753,10 @@ export default function Home() {
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <button
                       onClick={() => setMapMode(mapMode === "addcpe" ? "normal" : "addcpe")}
-                      className={`inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-lg border transition ${
+                      className={`inline-flex items-center gap-2 text-[11px] uppercase tracking-wider font-semibold px-4 py-1.5 rounded-full border transition-all duration-300 ${
                         mapMode === "addcpe"
-                          ? "bg-blue-600 border-blue-500 text-white"
-                          : "bg-slate-900/60 border-slate-700 text-slate-300 hover:border-slate-600"
+                          ? "bg-blue-500/20 border-blue-500/50 text-blue-200 shadow-[0_0_12px_rgba(59,130,246,0.3)]"
+                          : "bg-white/5 border-white/10 text-white/70 hover:text-white hover:bg-white/10"
                       }`}
                       title="Toggle add-CPE mode, then click the map to drop client sites for point-to-multipoint analysis"
                     >
@@ -765,7 +765,7 @@ export default function Home() {
                     {manualCpeCount > 0 && (
                       <button
                         onClick={handleClearManualCpes}
-                        className="text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-red-300 hover:border-red-500/40 transition"
+                        className="text-[11px] uppercase tracking-wider font-semibold px-4 py-1.5 rounded-full border border-white/10 bg-white/5 text-white/40 hover:text-red-300 hover:border-red-500/30 hover:bg-red-500/10 transition-all duration-300"
                       >
                         Clear {manualCpeCount} manual CPE{manualCpeCount > 1 ? "s" : ""}
                       </button>
@@ -789,9 +789,9 @@ export default function Home() {
 
                   {/* Elevation profile chart */}
                   {isProfileLoading ? (
-                    <div className="bg-slate-900/60 rounded-xl border border-slate-800 p-5 flex flex-col items-center justify-center h-[340px] text-slate-400">
-                      <span className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mb-2" />
-                      <p className="text-sm">Generating terrain profile...</p>
+                    <div className="bg-black/40 backdrop-blur-3xl rounded-xl border border-white/5 p-5 flex flex-col items-center justify-center h-[340px] text-white/40">
+                      <span className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mb-2 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                      <p className="text-[11px] uppercase tracking-wider font-semibold">Generating terrain profile...</p>
                     </div>
                   ) : (
                     (() => {

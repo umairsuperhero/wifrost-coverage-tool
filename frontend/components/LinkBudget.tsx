@@ -31,63 +31,65 @@ export default function LinkBudget({
   const fmtUnsigned = (v: number, unit: string) => `${v.toFixed(1)} ${unit}`;
 
   return (
-    <div className="bg-slate-900/60 rounded-xl border border-slate-800 p-5">
-      <p className="text-sm font-semibold text-white mb-3">⚡ Link Budget</p>
+    <div className="bg-black/40 backdrop-blur-3xl rounded-xl border border-white/5 p-5">
+      <p className="text-sm font-medium text-white/90 mb-3 flex items-center gap-2">
+        <span className="text-blue-400">⚡</span> Link Budget
+      </p>
 
-      <div className="flex justify-between text-sm py-1">
-        <span className="text-slate-400">TX Power</span>
-        <span className="text-slate-100 tabular-nums">{fmtSigned(txPowerDbm, "dBm")}</span>
+      <div className="flex justify-between text-[13px] py-1">
+        <span className="text-white/40">TX Power</span>
+        <span className="text-white/80 tabular-nums">{fmtSigned(txPowerDbm, "dBm")}</span>
       </div>
-      <div className="flex justify-between text-sm py-1">
-        <span className="text-slate-400">BTS Antenna Gain</span>
-        <span className="text-slate-100 tabular-nums">{fmtSigned(antennaGainDbi, "dBi")}</span>
+      <div className="flex justify-between text-[13px] py-1">
+        <span className="text-white/40">BTS Antenna Gain</span>
+        <span className="text-white/80 tabular-nums">{fmtSigned(antennaGainDbi, "dBi")}</span>
       </div>
-      <div className="flex justify-between text-sm py-1">
-        <span className="text-slate-400">Cable Loss</span>
-        <span className="text-slate-100 tabular-nums">{fmtLoss(cableLossDb, "dB")}</span>
-      </div>
-
-      <div className="border-t border-slate-700 my-1" />
-
-      <div className="flex justify-between text-sm py-1">
-        <span className="text-blue-400 font-bold">EIRP</span>
-        <span className="text-blue-400 font-bold tabular-nums">{fmtSigned(eirpDbm, "dBm")}</span>
+      <div className="flex justify-between text-[13px] py-1">
+        <span className="text-white/40">Cable Loss</span>
+        <span className="text-white/80 tabular-nums">{fmtLoss(cableLossDb, "dB")}</span>
       </div>
 
-      <div className="py-1" />
+      <div className="border-t border-white/5 my-2" />
 
-      <div className="flex justify-between text-sm py-1">
-        <span className="text-slate-400">Rx Sensitivity</span>
-        <span className="text-slate-100 tabular-nums">{fmtSigned(cpeSensitivityDbm, "dBm")}</span>
-      </div>
-      <div className="flex justify-between text-sm py-1">
-        <span className="text-slate-400">Rx Antenna Gain</span>
-        <span className="text-slate-100 tabular-nums">{fmtSigned(cpeGainDbi, "dBi")}</span>
-      </div>
-      <div className="flex justify-between text-sm py-1">
-        <span className="text-slate-400">Rx Cable Loss</span>
-        <span className="text-slate-100 tabular-nums">{fmtLoss(cpeCableLossDb, "dB")}</span>
-      </div>
-      <div className="flex justify-between text-sm py-1">
-        <span className="text-slate-400">System Margin</span>
-        <span className="text-slate-100 tabular-nums">{fmtLoss(systemMarginDb, "dB")}</span>
-      </div>
-
-      <div className="border-t border-slate-700 my-1" />
-
-      <div className="flex justify-between text-sm py-1">
-        <span className="text-white font-bold">Max Allowed PL</span>
-        <span className="text-white font-bold tabular-nums">{fmtUnsigned(maxAllowedPathLoss, "dB")}</span>
+      <div className="flex justify-between text-[13px] py-1">
+        <span className="text-blue-400 font-medium">EIRP</span>
+        <span className="text-blue-400 font-medium tabular-nums">{fmtSigned(eirpDbm, "dBm")}</span>
       </div>
 
       <div className="py-1" />
 
-      <div className="flex justify-between text-sm py-1">
-        <span className="text-slate-400">Max Range (sim)</span>
+      <div className="flex justify-between text-[13px] py-1">
+        <span className="text-white/40">Rx Sensitivity</span>
+        <span className="text-white/80 tabular-nums">{fmtSigned(cpeSensitivityDbm, "dBm")}</span>
+      </div>
+      <div className="flex justify-between text-[13px] py-1">
+        <span className="text-white/40">Rx Antenna Gain</span>
+        <span className="text-white/80 tabular-nums">{fmtSigned(cpeGainDbi, "dBi")}</span>
+      </div>
+      <div className="flex justify-between text-[13px] py-1">
+        <span className="text-white/40">Rx Cable Loss</span>
+        <span className="text-white/80 tabular-nums">{fmtLoss(cpeCableLossDb, "dB")}</span>
+      </div>
+      <div className="flex justify-between text-[13px] py-1">
+        <span className="text-white/40">System Margin</span>
+        <span className="text-white/80 tabular-nums">{fmtLoss(systemMarginDb, "dB")}</span>
+      </div>
+
+      <div className="border-t border-white/5 my-2" />
+
+      <div className="flex justify-between text-[13px] py-1">
+        <span className="text-white/90 font-medium">Max Allowed PL</span>
+        <span className="text-white/90 font-medium tabular-nums">{fmtUnsigned(maxAllowedPathLoss, "dB")}</span>
+      </div>
+
+      <div className="py-1" />
+
+      <div className="flex justify-between text-[13px] py-1">
+        <span className="text-white/40">Max Range (sim)</span>
         {maxRangeKm !== null ? (
-          <span className="text-emerald-400 font-semibold tabular-nums">{maxRangeKm.toFixed(1)} km</span>
+          <span className="text-emerald-400 font-medium tabular-nums shadow-[0_0_8px_rgba(52,211,153,0.15)]">{maxRangeKm.toFixed(1)} km</span>
         ) : (
-          <span className="text-slate-500 tabular-nums">—</span>
+          <span className="text-white/30 tabular-nums">—</span>
         )}
       </div>
     </div>
