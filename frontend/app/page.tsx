@@ -632,80 +632,76 @@ export default function Home() {
   return (
     <Layout>
       {/* Sidebar - controls & parameters */}
-      <div className="absolute top-24 bottom-6 left-6 w-96 z-20 pointer-events-auto">
-        <Sidebar
-          onFileParsed={handleFileParsed}
-          onSimulate={handleSimulate}
-          isLoading={isLoading}
-          parsedSites={parsedData.sites}
-          onSectorChange={(azimuths, hpbw) => setLiveSector({ azimuths, hpbw })}
-          onLoadHistoryRun={handleLoadHistoryRun}
-          showToast={showToast}
-        />
-      </div>
+      <Sidebar
+        onFileParsed={handleFileParsed}
+        onSimulate={handleSimulate}
+        isLoading={isLoading}
+        parsedSites={parsedData.sites}
+        onSectorChange={(azimuths, hpbw) => setLiveSector({ azimuths, hpbw })}
+        onLoadHistoryRun={handleLoadHistoryRun}
+        showToast={showToast}
+      />
 
-      {/* Edge-to-Edge Map Background */}
-      <div className="fixed inset-0 z-0 pointer-events-auto">
-        <MapView
-          sites={parsedData.sites}
-          polygons={parsedData.polygons}
-          lines={parsedData.lines}
-          coverageGeojson={simulationResults?.coverage_geojson}
-          cpeResults={cpeResults}
-          selectedBtsIndex={selectedBtsIndex}
-          onSelectBts={handleSelectBtsMap}
-          selectedCpeName={selectedCpe?.name || null}
-          onSelectCpe={(cpe) => handleSelectCpe(cpe)}
-          activeScenario={activeScenario}
-          activeThreshold={activeThreshold}
-          sectorInfo={
-            simulationResults && selectedBtsIndex !== -1
-              ? {
-                  azimuths: liveSector.azimuths,
-                  hpbw: liveSector.hpbw,
-                  radiusKm: simulationResults.stats.max_range_km ?? 2.0,
-                }
-              : null
-          }
-          onMoveBts={handleMoveBts}
-          onAddCpe={handleAddCpe}
-          mapMode={mapMode}
-          setMapMode={setMapMode}
-          hoverPoint={hoverPoint}
-          opacity={mapOpacity}
-          setOpacity={setMapOpacity}
-          mapTheme={mapTheme}
-          setMapTheme={setMapTheme}
-          measurePoints={measurePoints}
-          setMeasurePoints={setMeasurePoints}
-        />
-      </div>
-
-      {/* Right Dashboard Area (Overlays) */}
-      <main className="absolute inset-0 pointer-events-none z-10 flex pt-24">
-        {/* Spacer for sidebar */}
-        <div className="w-[24rem] shrink-0 ml-6" /> 
-        
-        <div className="flex-1 flex flex-col h-full relative">
-          {parsedData.sites.length === 0 ? (
-            /* Empty State */
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center text-white/40 pointer-events-auto z-50">
-              <div className="p-10 bg-black/40 backdrop-blur-3xl border border-white/10 rounded-3xl flex flex-col items-center justify-center mb-4 shadow-2xl">
-                <Compass className="w-16 h-16 text-blue-500 animate-spin-slow drop-shadow-[0_0_12px_rgba(59,130,246,0.6)] mb-6" />
-                <h2 className="text-2xl font-bold text-white mb-2">No Project Loaded</h2>
-                <p className="text-sm text-white/60 max-w-sm">
-                  Please upload a KMZ, KML, or Excel file on the sidebar to parse candidate tower locations and customer sites.
-                </p>
-              </div>
+      {/* Right Dashboard Area */}
+      <main className="flex-1 flex flex-col h-full overflow-hidden bg-black">
+        {parsedData.sites.length === 0 ? (
+          /* Empty State */
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-white/40">
+            <div className="p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center mb-4 shadow-xl">
+              <Compass className="w-12 h-12 text-blue-500 animate-spin-slow drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
             </div>
-          ) : (
-            /* Bottom Overlays */
-            <div className="absolute top-0 bottom-6 left-6 right-6 flex flex-col justify-end pointer-events-none">
-              <div className="max-w-screen-2xl w-full mx-auto space-y-4 pointer-events-auto max-h-full overflow-y-auto pr-4 pb-4">
+            <h2 className="text-xl font-bold text-white mb-1">No Project Loaded</h2>
+            <p className="text-sm text-slate-500 max-w-sm">
+              Please upload a KMZ, KML, or Excel file on the sidebar to parse candidate tower locations and customer sites.
+            </p>
+          </div>
+        ) : (
+          /* Dashboard Layout */
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Map View — wedges update live from compass rose */}
+            <div className="h-[56%] w-full border-b border-white/5 relative min-h-[340px]">
+              <MapView
+                sites={parsedData.sites}
+                polygons={parsedData.polygons}
+                lines={parsedData.lines}
+                coverageGeojson={simulationResults?.coverage_geojson}
+                cpeResults={cpeResults}
+                selectedBtsIndex={selectedBtsIndex}
+                onSelectBts={handleSelectBtsMap}
+                selectedCpeName={selectedCpe?.name || null}
+                onSelectCpe={(cpe) => handleSelectCpe(cpe)}
+                activeScenario={activeScenario}
+                activeThreshold={activeThreshold}
+                sectorInfo={
+                  simulationResults && selectedBtsIndex !== -1
+                    ? {
+                        azimuths: liveSector.azimuths,
+                        hpbw: liveSector.hpbw,
+                        radiusKm: simulationResults.stats.max_range_km ?? 2.0,
+                      }
+                    : null
+                }
+                onMoveBts={handleMoveBts}
+                onAddCpe={handleAddCpe}
+                mapMode={mapMode}
+                setMapMode={setMapMode}
+                hoverPoint={hoverPoint}
+                opacity={mapOpacity}
+                setOpacity={setMapOpacity}
+                mapTheme={mapTheme}
+                setMapTheme={setMapTheme}
+                measurePoints={measurePoints}
+                setMeasurePoints={setMeasurePoints}
+              />
+            </div>
+
+            {/* Bottom half: Results & Configuration Details */}
+            <div className="flex-1 overflow-y-auto px-6 py-6">
+              <div className="max-w-screen-2xl mx-auto space-y-5">
               {isLoading && slowStart && (
-                <div className="flex flex-col items-center gap-2 mt-4 text-center bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-                  <p className="text-sm text-amber-400 font-medium drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]">⏳ Still working…</p>
-                  <p className="text-xs text-white/60 max-w-xs">
+                <div className="flex flex-col items-center gap-2 mt-4 text-center">
+                  <p className="text-sm text-amber-400 font-medium">⏳ Still working…</p>
+                  <p className="text-xs text-slate-400 max-w-xs">
                     Large coverage areas or many sites can take a little longer to
                     compute. If the backend was idle it may be cold-starting — hang tight.
                   </p>
@@ -846,26 +842,26 @@ export default function Home() {
                 </>
               ) : (
                 /* Post-load, Pre-simulation Help Message */
-                <div className="p-6 bg-black/40 backdrop-blur-3xl border border-white/10 rounded-3xl flex items-start gap-4 shadow-2xl">
-                  <div className="p-3 bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-2xl shadow-[0_0_12px_rgba(59,130,246,0.4)]">
+                <div className="p-6 bg-slate-900/40 border border-slate-800 rounded-xl flex items-start gap-4">
+                  <div className="p-3 bg-blue-600/10 border border-blue-500/20 text-blue-400 rounded-lg">
                     <Signal className="w-6 h-6 animate-pulse" />
                   </div>
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold text-white tracking-tight">Layout loaded successfully</h3>
-                    <p className="text-sm text-white/60 leading-relaxed max-w-xl">
-                      Your layout file <b className="text-white/90">{fileName}</b> contains <b className="text-white/90">{parsedData.sites.length} sites</b> and{" "}
-                      <b className="text-white/90">{parsedData.polygons.length} boundary polygons</b>.
+                  <div className="space-y-1">
+                    <h3 className="font-semibold text-white">Layout loaded successfully</h3>
+                    <p className="text-sm text-slate-400 leading-relaxed">
+                      Your layout file <b>{fileName}</b> contains <b>{parsedData.sites.length} sites</b> and{" "}
+                      <b>{parsedData.polygons.length} boundary polygons</b>.
                     </p>
-                    <p className="text-sm text-white/50 leading-relaxed max-w-xl">
-                      Choose an active BTS tower in the dropdown list, adjust equipment specifications, and click <b className="text-white/80">Run Simulation</b> on the sidebar to compute coverage maps, path loss, and link budgets.
+                    <p className="text-sm text-slate-500 leading-relaxed mt-2">
+                      Choose an active BTS tower in the dropdown list, adjust equipment specifications, and click <b>Run Simulation</b> on the sidebar to compute coverage maps, path loss, and link budgets.
                     </p>
                   </div>
                 </div>
               )}
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </main>
 
       {/* Slide-in Toast Notification */}
