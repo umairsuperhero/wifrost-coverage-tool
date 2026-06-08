@@ -699,9 +699,9 @@ export default function Home() {
               </div>
             </div>
           ) : (
-            /* Bottom Overlays */
-            <div className="absolute top-0 bottom-6 left-6 right-6 flex flex-col justify-end pointer-events-none">
-              <div className="max-w-screen-2xl w-full mx-auto space-y-4 pointer-events-auto max-h-full overflow-y-auto pr-4 pb-4">
+            /* Bottom Overlays (Floating Glass Cards) */
+            <div className="absolute top-24 bottom-6 left-[420px] right-6 flex flex-col justify-end pointer-events-none">
+              <div className="w-full max-w-5xl ml-auto space-y-4 pointer-events-auto max-h-full overflow-y-auto pr-4 custom-scrollbar">
               {isLoading && slowStart && (
                 <div className="flex flex-col items-center gap-2 mt-4 text-center bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-white/10">
                   <p className="text-sm text-amber-400 font-medium drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]">⏳ Still working…</p>

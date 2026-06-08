@@ -324,31 +324,33 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
   };
 
   return (
-    <aside className="w-[380px] bg-black/40 backdrop-blur-3xl border border-white/10 rounded-3xl shadow-2xl flex flex-col h-full overflow-hidden">
-      {/* Sidebar Tabs */}
-      <div className="flex border-b border-white/5/80 bg-black/20">
-        <button
-          onClick={() => setActiveTab("params")}
-          className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border-b-2 transition ${
-            activeTab === "params"
-              ? "border-blue-500 text-blue-450 font-bold bg-white/5"
-              : "border-transparent text-slate-500 hover:text-slate-350"
-          }`}
-        >
-          <Sliders className="w-3.5 h-3.5" />
-          Parameters
-        </button>
-        <button
-          onClick={() => setActiveTab("history")}
-          className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border-b-2 transition ${
-            activeTab === "history"
-              ? "border-blue-500 text-blue-450 font-bold bg-white/5"
-              : "border-transparent text-slate-500 hover:text-slate-350"
-          }`}
-        >
-          <History className="w-3.5 h-3.5" />
-          History
-        </button>
+    <aside className="w-[380px] bg-black/30 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-[0_0_40px_rgba(0,0,0,0.5)] flex flex-col h-full overflow-hidden">
+      {/* Sidebar Tabs (Segmented Control) */}
+      <div className="p-4 flex justify-center border-b border-white/5">
+        <div className="flex bg-black/40 backdrop-blur-md rounded-full p-1 border border-white/10 w-full max-w-[300px]">
+          <button
+            onClick={() => setActiveTab("params")}
+            className={`flex-1 py-2 text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 rounded-full transition-all duration-300 ${
+              activeTab === "params"
+                ? "bg-white/10 text-white shadow-sm"
+                : "text-white/40 hover:text-white/70"
+            }`}
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            Parameters
+          </button>
+          <button
+            onClick={() => setActiveTab("history")}
+            className={`flex-1 py-2 text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 rounded-full transition-all duration-300 ${
+              activeTab === "history"
+                ? "bg-white/10 text-white shadow-sm"
+                : "text-white/40 hover:text-white/70"
+            }`}
+          >
+            <History className="w-3.5 h-3.5" />
+            History
+          </button>
+        </div>
       </div>
 
       {activeTab === "history" ? (
@@ -917,11 +919,11 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           </div>
 
           {/* Rerun simulation button */}
-          <div className="p-5 border-t border-slate-800 bg-slate-950/20">
+          <div className="p-6 bg-transparent flex justify-center">
             <button
               onClick={handleSimulateClick}
               disabled={isLoading || parsedSites.length === 0}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-750 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition duration-300 shadow-lg shadow-blue-500/10 border border-blue-500/20 cursor-pointer text-sm"
+              className="w-[90%] py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-full font-bold flex items-center justify-center gap-2 transition-all duration-300 shadow-[0_0_20px_rgba(79,70,229,0.4)] disabled:shadow-none border border-white/20 cursor-pointer text-[13px] tracking-wide"
             >
               {isLoading ? (
                 <>
