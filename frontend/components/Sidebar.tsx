@@ -126,10 +126,8 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
   interface PresetConfig {
     name: string;
     frequency: number;
-    environment: string;
     btsHeight: number;
     cpeHeight: number;
-    cpeSensitivity: number;
     systemMargin: number;
     txPower: number;
     antennaGain: number;
@@ -137,37 +135,31 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
   }
 
   const RF_PRESETS: Record<string, PresetConfig> = {
-    dense_urban: {
-      name: "Dense Urban",
-      frequency: 600.0,
-      environment: "urban",
-      btsHeight: 30.0,
-      cpeHeight: 10.0,
-      cpeSensitivity: -98.0,
-      systemMargin: 20.0,
-      txPower: 23.0,
-      antennaGain: 13.0,
-      cableLoss: 0.0
-    },
-    rural_hills: {
-      name: "Rural Hills",
+    macro_site: {
+      name: "Macro Site (High Tower, Long Range)",
       frequency: 500.0,
-      environment: "vegetation_dense",
       btsHeight: 45.0,
       cpeHeight: 12.0,
-      cpeSensitivity: -104.0,
       systemMargin: 12.0,
       txPower: 23.0,
       antennaGain: 13.0,
       cableLoss: 0.0
     },
-    coastal_flat: {
-      name: "Coastal Flat",
+    standard_cell: {
+      name: "Standard Cell (Typical Coverage)",
       frequency: 600.0,
-      environment: "open_water",
+      btsHeight: 30.0,
+      cpeHeight: 10.0,
+      systemMargin: 20.0,
+      txPower: 23.0,
+      antennaGain: 13.0,
+      cableLoss: 0.0
+    },
+    small_cell: {
+      name: "Small Cell (Low Profile)",
+      frequency: 600.0,
       btsHeight: 20.0,
       cpeHeight: 8.0,
-      cpeSensitivity: -104.0,
       systemMargin: 8.0,
       txPower: 23.0,
       antennaGain: 13.0,
@@ -181,7 +173,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
     const p = RF_PRESETS[presetKey];
     if (!p) return;
     setFrequencyMhz(p.frequency);
-    setEnvironment(p.environment);
+    // Environment is purposefully NOT overridden so 'auto' landcover stays active!
     setBtsHeight(p.btsHeight);
     setCpeHeight(p.cpeHeight);
     // Sensitivity stays driven by channel BW / NF / SNR — presets no longer
@@ -435,12 +427,12 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
             <select
               value={rfPreset}
               onChange={(e) => applyRfPreset(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-950/60 border border-slate-855 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
             >
-              <option value="manual">Manual (Custom)</option>
-              <option value="dense_urban">Dense Urban (600MHz, 36dBm, Urban)</option>
-              <option value="rural_hills">Rural Hills (500MHz, 36dBm, Dense Veg)</option>
-              <option value="coastal_flat">Coastal Flat (600MHz, 36dBm, Open Water)</option>
+              <option value="manual">✓ Manual (Custom)</option>
+              <option value="macro_site">Macro Site (High Tower, Long Range)</option>
+              <option value="standard_cell">Standard Cell (Typical Coverage)</option>
+              <option value="small_cell">Small Cell (Low Profile)</option>
             </select>
           </div>
 
