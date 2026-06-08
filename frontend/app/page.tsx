@@ -701,11 +701,11 @@ export default function Home() {
           ) : (
             /* Bottom Overlays (Floating Glass Cards) */
             <div className="absolute top-24 bottom-6 left-[360px] right-6 flex flex-col justify-end pointer-events-none">
-              <div className="w-full max-w-4xl ml-auto space-y-3 pointer-events-auto max-h-full overflow-y-auto pr-2 custom-scrollbar transform scale-90 origin-bottom-right 2xl:scale-100">
+              <div className="w-full max-w-[1400px] ml-auto space-y-3 pointer-events-auto max-h-full overflow-y-auto pr-2 custom-scrollbar transform scale-90 xl:scale-95 2xl:scale-100 origin-bottom-right">
               {isLoading && slowStart && (
-                <div className="flex flex-col items-center gap-2 mt-4 text-center bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+                <div className="flex flex-col items-center gap-2 mt-4 text-center bg-slate-950/85 backdrop-blur-2xl rounded-2xl p-4 border border-white/10">
                   <p className="text-sm text-amber-400 font-medium drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]">⏳ Still working…</p>
-                  <p className="text-xs text-white/60 max-w-xs">
+                  <p className="text-xs text-slate-300 max-w-xs">
                     Large coverage areas or many sites can take a little longer to
                     compute. If the backend was idle it may be cold-starting — hang tight.
                   </p>
@@ -713,45 +713,51 @@ export default function Home() {
               )}
               {simulationResults ? (
                 <>
-                  {/* Run summary — what was run, when, and the key parameters */}
-                  <RunSummaryBar
-                    runCount={runCount}
-                    lastRunAt={lastRunAt}
-                    isLoading={isLoading}
-                    projectName={fileName.replace(/\.[^/.]+$/, "")}
-                    btsName={
-                      selectedBtsIndex === -1
-                        ? "All towers"
-                        : parsedData.sites.filter((s) => s.is_bts_candidate)[selectedBtsIndex]?.name
-                    }
-                    frequencyMhz={activeSimulationParams?.frequency_mhz}
-                    model={activeSimulationParams?.model}
-                    environment={simulationResults.stats.environment_used ?? activeSimulationParams?.environment}
-                    environmentAuto={simulationResults.stats.environment_auto}
-                    eirpDbm={activeSimulationParams?.eirp_dbm}
-                    systemMarginDb={activeSimulationParams?.system_margin_db}
-                    terrainLoaded={simulationResults.stats.terrain_loaded}
-                    landcoverLoaded={simulationResults.stats.landcover_loaded}
-                  />
+                  {/* Horizontal Dock Layout */}
+                  <div className="flex flex-col 2xl:flex-row gap-3 items-end justify-end">
+                    {/* Left side of dock: Info & Banner */}
+                    <div className="flex flex-col gap-3 w-full 2xl:w-[400px] shrink-0">
+                      <RunSummaryBar
+                        runCount={runCount}
+                        lastRunAt={lastRunAt}
+                        isLoading={isLoading}
+                        projectName={fileName.replace(/\.[^/.]+$/, "")}
+                        btsName={
+                          selectedBtsIndex === -1
+                            ? "All towers"
+                            : parsedData.sites.filter((s) => s.is_bts_candidate)[selectedBtsIndex]?.name
+                        }
+                        frequencyMhz={activeSimulationParams?.frequency_mhz}
+                        model={activeSimulationParams?.model}
+                        environment={simulationResults.stats.environment_used ?? activeSimulationParams?.environment}
+                        environmentAuto={simulationResults.stats.environment_auto}
+                        eirpDbm={activeSimulationParams?.eirp_dbm}
+                        systemMarginDb={activeSimulationParams?.system_margin_db}
+                        terrainLoaded={simulationResults.stats.terrain_loaded}
+                        landcoverLoaded={simulationResults.stats.landcover_loaded}
+                      />
 
-                  {/* Results summary banner */}
-                  <ResultsBanner
-                    plainEnglishResult={simulationResults.plain_english_result}
-                    coveragePct={simulationResults.stats.coverage_pct}
-                    projectName={fileName.replace(/\.[^/.]+$/, "")}
-                    activeSimulationParams={activeSimulationParams}
-                    stats={simulationResults.stats}
-                    threeScenarios={simulationResults.three_scenarios}
-                    cpeResults={cpeResults}
-                    showToast={showToast}
-                  />
+                      <ResultsBanner
+                        plainEnglishResult={simulationResults.plain_english_result}
+                        coveragePct={simulationResults.stats.coverage_pct}
+                        projectName={fileName.replace(/\.[^/.]+$/, "")}
+                        activeSimulationParams={activeSimulationParams}
+                        stats={simulationResults.stats}
+                        threeScenarios={simulationResults.three_scenarios}
+                        cpeResults={cpeResults}
+                        showToast={showToast}
+                      />
+                    </div>
 
-                  {/* Scenarios comparative Row */}
-                  <MetricsRow
-                    threeScenarios={simulationResults.three_scenarios}
-                    activeScenarioName={activeScenario}
-                    onScenarioChange={setActiveScenario}
-                  />
+                    {/* Right side of dock: Scenarios */}
+                    <div className="flex-1 w-full shrink-0 min-w-0">
+                      <MetricsRow
+                        threeScenarios={simulationResults.three_scenarios}
+                        activeScenarioName={activeScenario}
+                        onScenarioChange={setActiveScenario}
+                      />
+                    </div>
+                  </div>
 
                   {/* P2MP / manual-CPE controls */}
                   <div className="flex items-center justify-between gap-3 flex-wrap">

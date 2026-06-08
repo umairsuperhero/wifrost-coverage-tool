@@ -53,10 +53,12 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
   const [btsDefaults, setBtsDefaults] = useState<any>(null);
   const [cpeDefaults, setCpeDefaults] = useState<any>(null);
 
-  // History states
   const [activeTab, setActiveTab] = useState<"params" | "history">("params");
   const [historyRuns, setHistoryRuns] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // VisionOS Ornament State
+  const [isExpanded, setIsExpanded] = useState(true);
 
   const fetchHistory = () => {
     setLoadingHistory(true);
@@ -324,10 +326,64 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
   };
 
   return (
-    <aside className="w-[320px] bg-black/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-[0_0_40px_rgba(0,0,0,0.5)] flex flex-col h-full overflow-hidden">
+    <div className="flex items-start gap-4 h-full pointer-events-none">
+      {/* VisionOS Ornament (Left Floating Toolbar) */}
+      <div className="flex flex-col items-center gap-4 bg-slate-950/85 backdrop-blur-2xl border border-white/10 rounded-full p-2 py-4 pointer-events-auto shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-300">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          title="Toggle Parameters Panel"
+          className={`p-3 rounded-full transition-all duration-300 ${
+            isExpanded ? "bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.5)] text-white" : "text-slate-400 hover:text-white hover:bg-white/10"
+          }`}
+        >
+          <Sliders className="w-5 h-5" />
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab("history");
+            setIsExpanded(true);
+          }}
+          title="Simulation History"
+          className={`p-3 rounded-full transition-all duration-300 ${
+            activeTab === "history" && isExpanded ? "bg-white/10 text-white" : "text-slate-400 hover:text-white hover:bg-white/10"
+          }`}
+        >
+          <History className="w-5 h-5" />
+        </button>
+        
+        <div className="w-8 h-[1px] bg-white/10 my-1" />
+
+        <button
+          onClick={() => {
+            if (!isExpanded) setIsExpanded(true);
+            else if (parsedSites.length > 0 && !isLoading) {
+              const runBtn = document.getElementById("simulate-btn");
+              if (runBtn) runBtn.click();
+            }
+          }}
+          disabled={isLoading || parsedSites.length === 0}
+          title="Run Simulation"
+          className="p-3 rounded-full bg-blue-600/80 hover:bg-blue-500 disabled:bg-slate-800 disabled:opacity-50 text-white transition-all duration-300"
+        >
+          {isLoading ? (
+            <span className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin block" />
+          ) : (
+            <Play className="fill-current w-5 h-5 ml-0.5" />
+          )}
+        </button>
+      </div>
+
+      {/* Expanded Modal Pane */}
+      <div
+        className={`transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden h-full pointer-events-auto ${
+          isExpanded ? "w-[320px] opacity-100 scale-100" : "w-0 opacity-0 scale-95 origin-left"
+        }`}
+      >
+        <aside className="w-[320px] bg-slate-950/85 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] shadow-[0_0_40px_rgba(0,0,0,0.5)] flex flex-col h-full overflow-hidden">
       {/* Sidebar Tabs (Segmented Control) */}
-      <div className="p-4 flex justify-center border-b border-white/5">
-        <div className="flex bg-black/40 backdrop-blur-md rounded-full p-1 border border-white/10 w-full max-w-[300px]">
+      <div className="p-4 flex justify-center border-b border-white/5 shrink-0">
+        <div className="flex bg-black/50 backdrop-blur-md rounded-full p-1 border border-white/10 w-full max-w-[300px]">
           <button
             onClick={() => setActiveTab("params")}
             className={`flex-1 py-2 text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 rounded-full transition-all duration-300 ${
@@ -919,8 +975,9 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           </div>
 
           {/* Rerun simulation button */}
-          <div className="p-6 bg-transparent flex justify-center">
+          <div className="p-6 shrink-0 bg-transparent flex justify-center">
             <button
+              id="simulate-btn"
               onClick={handleSimulateClick}
               disabled={isLoading || parsedSites.length === 0}
               className="w-[90%] py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-full font-bold flex items-center justify-center gap-2 transition-all duration-300 shadow-[0_0_20px_rgba(79,70,229,0.4)] disabled:shadow-none border border-white/20 cursor-pointer text-[13px] tracking-wide"
@@ -940,6 +997,8 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           </div>
         </>
       )}
-    </aside>
+        </aside>
+      </div>
+    </div>
   );
 }
