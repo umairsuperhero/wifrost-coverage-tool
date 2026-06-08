@@ -418,23 +418,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
         </h2>
 
         <div className="space-y-4">
-          {/* RF Parameter Preset */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
-              RF Parameter Preset
-              <Tooltip content="Quick presets to pre-fill standard deployment environments, or choose Manual to custom tune parameters." />
-            </label>
-            <select
-              value={rfPreset}
-              onChange={(e) => applyRfPreset(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
-            >
-              <option value="manual">✓ Manual (Custom)</option>
-              <option value="macro_site">Macro Site (High Tower, Long Range)</option>
-              <option value="standard_cell">Standard Cell (Typical Coverage)</option>
-              <option value="small_cell">Small Cell (Low Profile)</option>
-            </select>
-          </div>
+
 
           {/* Active BTS site */}
           <div className="space-y-1.5">
@@ -473,6 +457,26 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
               {advancedMode ? "Advanced ▴" : "Advanced ▾"}
             </button>
           </div>
+
+          {/* RF Parameter Preset (Advanced) */}
+          {advancedMode && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+                RF Deployment Profile
+                <Tooltip content="Quick presets to pre-fill standard hardware parameters, or choose Manual to custom tune." />
+              </label>
+              <select
+                value={rfPreset}
+                onChange={(e) => applyRfPreset(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+              >
+                <option value="manual">✓ Manual (Custom)</option>
+                <option value="macro_site">Macro Site (High Tower, Long Range)</option>
+                <option value="standard_cell">Standard Cell (Typical Coverage)</option>
+                <option value="small_cell">Small Cell (Low Profile)</option>
+              </select>
+            </div>
+          )}
 
           {/* Model Type */}
           {advancedMode && (
