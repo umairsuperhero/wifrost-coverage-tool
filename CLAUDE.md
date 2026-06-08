@@ -25,3 +25,9 @@ If you skip verification, prefix the code with a comment:
 `// UNVERIFIED: I have not confirmed this symbol exists`
 
 Plan-then-execute mode is preferred for any task touching more than one file. Use Shift+Tab to enter plan mode before starting.
+
+## Deployment & Production Testing Protocol
+
+1. **Never leave changes hanging**: If a user asks to implement a feature or fix a bug, and you complete the local changes, you must immediately `git add`, `git commit -m "..."`, and `git push origin main`.
+2. **Verify Production Deployment**: After pushing, you must wait for the CI/CD pipeline (e.g. Vercel, Cloud Run) to complete and then explicitly verify that the changes are live on the production domain before claiming the task is complete.
+3. **Report Status**: Do not say "it is updated" until you have confirmed the push was successful and the production environment reflects the changes.
