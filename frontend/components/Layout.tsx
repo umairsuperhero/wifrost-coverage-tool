@@ -8,18 +8,18 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-[#0F1117]">
+    <div className="flex flex-col h-screen overflow-hidden bg-black">
       {/* Top Header Bar */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md z-10">
+      <header className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-black/30 backdrop-blur-2xl z-10">
         <div className="flex items-center space-x-3">
           <div className="p-2 bg-blue-600 rounded-lg text-white">
             <Wifi className="w-6 h-6 animate-pulse" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-              WiFrost <span className="text-blue-500 font-semibold text-sm px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded">TVWS RF Coverage</span>
+            <h1 className="text-xl font-medium tracking-tight text-white flex items-center gap-2">
+              WiFrost <span className="text-white/70 font-normal text-xs px-2 py-0.5 bg-white/5 border border-white/10 rounded-full">TVWS RF Coverage</span>
             </h1>
-            <p className="text-xs text-slate-400">TVWS Propagation Planning Tool</p>
+            <p className="text-[11px] uppercase tracking-widest font-semibold text-white/40 mt-0.5">TVWS Propagation Planning Tool</p>
           </div>
         </div>
 
@@ -29,10 +29,10 @@ export default function Layout({ children }: LayoutProps) {
           
           <div className="flex items-center space-x-3 text-right">
             <div>
-              <p className="text-xs text-slate-400">Sales Engineer</p>
-              <p className="text-sm font-semibold text-white">Welcome back, Marcelo</p>
+              <p className="text-[10px] tracking-wider uppercase text-white/40 font-semibold">Sales Engineer</p>
+              <p className="text-sm font-medium text-white/90">Welcome back, Marcelo</p>
             </div>
-            <div className="w-10 h-10 rounded-full bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 font-bold">
+            <div className="w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/80 font-medium">
               M
             </div>
           </div>

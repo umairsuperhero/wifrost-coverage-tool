@@ -29,7 +29,7 @@ const Tooltip: React.FC<TooltipProps> = ({ content }) => {
   return (
     <span className="relative group inline-flex items-center">
       <HelpCircle className="w-3 h-3 text-slate-500 hover:text-slate-300 cursor-help" />
-      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-slate-950/95 backdrop-blur-md border border-slate-800 text-xs text-slate-200 font-normal rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none text-center normal-case">
+      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-black/60 backdrop-blur-xl border border-white/10 text-xs text-slate-200 font-normal rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none text-center normal-case">
         {content}
       </span>
     </span>
@@ -324,14 +324,14 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
   };
 
   return (
-    <aside className="w-[380px] bg-slate-900/40 border-r border-slate-800 flex flex-col h-full overflow-hidden">
+    <aside className="w-[380px] bg-black/40 backdrop-blur-3xl border-r border-white/5 flex flex-col h-full overflow-hidden">
       {/* Sidebar Tabs */}
-      <div className="flex border-b border-slate-800/80 bg-slate-950/20">
+      <div className="flex border-b border-white/5/80 bg-black/20">
         <button
           onClick={() => setActiveTab("params")}
           className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border-b-2 transition ${
             activeTab === "params"
-              ? "border-blue-500 text-blue-450 font-bold bg-slate-900/10"
+              ? "border-blue-500 text-blue-450 font-bold bg-white/5"
               : "border-transparent text-slate-500 hover:text-slate-350"
           }`}
         >
@@ -342,7 +342,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           onClick={() => setActiveTab("history")}
           className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border-b-2 transition ${
             activeTab === "history"
-              ? "border-blue-500 text-blue-450 font-bold bg-slate-900/10"
+              ? "border-blue-500 text-blue-450 font-bold bg-white/5"
               : "border-transparent text-slate-500 hover:text-slate-350"
           }`}
         >
@@ -365,7 +365,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
         <>
           <div className="flex-1 overflow-y-auto">
             {/* File Upload Section */}
-      <div className="p-5 border-b border-slate-800 space-y-4">
+      <div className="p-5 border-b border-white/5 space-y-4">
         <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
           <Upload className="w-4 h-4 text-blue-500" />
           1. Import Network Layout
@@ -375,7 +375,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className="border-2 border-dashed border-slate-750 hover:border-blue-500/50 hover:bg-blue-600/5 rounded-xl p-6 text-center cursor-pointer transition-all duration-300 group"
+          className="border-2 border-dashed border-white/20 bg-white/[0.02] hover:bg-white/[0.04] rounded-xl p-6 text-center cursor-pointer transition-all duration-300 group"
         >
           <input
             type="file"
@@ -424,12 +424,12 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
 
           {/* Active BTS site */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase">Active BTS Site</label>
+            <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Active BTS Site</label>
             <select
               value={selectedBtsIndex}
               onChange={(e) => setSelectedBtsIndex(Number(e.target.value))}
               disabled={btsCandidates.length === 0}
-              className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 disabled:opacity-50"
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 disabled:opacity-50"
             >
               {btsCandidates.length === 0 ? (
                 <option value={0}>No BTS candidates found</option>
@@ -463,14 +463,14 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           {/* RF Parameter Preset (Advanced) */}
           {advancedMode && (
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+              <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40 flex items-center gap-1.5">
                 RF Deployment Profile
                 <Tooltip content="Quick presets to pre-fill standard hardware parameters, or choose Manual to custom tune." />
               </label>
               <select
                 value={rfPreset}
                 onChange={(e) => applyRfPreset(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
               >
                 <option value="manual">✓ Manual (Custom)</option>
                 <option value="macro_site">Macro Site (High Tower, Long Range)</option>
@@ -483,7 +483,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           {/* Model Type */}
           {advancedMode && (
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+              <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40 flex items-center gap-1.5">
                 Propagation Model
                 <Tooltip content="Terrain-Aware: Okumura-Hata propagation calculated over real elevation data from SRTM. Flat Hata: Standard Hata formula assuming a flat plain." />
               </label>
@@ -517,7 +517,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           {/* Clutter Environment */}
           {advancedMode && (
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+              <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40 flex items-center gap-1.5">
                 Clutter Environment
                 <Tooltip content="Auto derives the environment from ESA WorldCover land cover for the area — recommended, avoids biasing results with a wrong manual pick. Per-pixel clutter is always applied from land cover when available; this setting controls the Hata correction type. Manual: Open (3 dB), Open Water (0 dB), Suburban (8 dB), Light Vegetation (6 dB), Dense Vegetation (15 dB), Port/Industrial (12 dB), Urban (18 dB)." />
               </label>
@@ -527,7 +527,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                   setEnvironment(e.target.value);
                   setRfPreset("manual");
                 }}
-                className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
               >
                 <option value="auto">Auto (from land cover) — recommended</option>
                 <option value="open">Open / Rural Flat</option>
@@ -549,7 +549,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           {/* Frequency & Heights */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+              <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40 flex items-center gap-1.5">
                 Frequency (MHz)
                 <Tooltip content="TVWS frequencies operate between 470-670 MHz. Lower frequencies propagate further and penetrate obstacles better." />
               </label>
@@ -562,11 +562,11 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                 }}
                 min={470}
                 max={670}
-                className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+              <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40 flex items-center gap-1.5">
                 BTS Height (m)
                 <Tooltip content="Height of the base station antenna above ground level. Higher placement improves line-of-sight and clearance over obstacles." />
               </label>
@@ -577,15 +577,15 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                   setBtsHeight(Number(e.target.value));
                   setRfPreset("manual");
                 }}
-                className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
               />
             </div>
           </div>
 
           {/* Transmitter Power specs */}
           {advancedMode && (
-            <details className="group border border-slate-850 rounded-lg bg-slate-950/20 overflow-hidden">
-              <summary className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase cursor-pointer flex justify-between items-center hover:bg-slate-950/40 transition">
+            <details className="group border border-white/10 rounded-xl bg-white/[0.02] overflow-hidden">
+              <summary className="px-3 py-2 text-[10px] uppercase tracking-widest font-semibold text-white/40 cursor-pointer flex justify-between items-center hover:bg-slate-950/40 transition">
                 <span>BTS Equipment Config</span>
                 <Settings className="w-3.5 h-3.5 text-slate-500 group-open:rotate-90 transition duration-300" />
               </summary>
@@ -637,7 +637,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
 
           {/* ── ANTENNA SECTORS ─────────────────────────────── */}
           <div className="border border-slate-700 rounded-lg bg-slate-950/20 overflow-hidden">
-            <div className="px-3 py-2 border-b border-slate-800 flex items-center gap-2">
+            <div className="px-3 py-2 border-b border-white/5 flex items-center gap-2">
               <Compass className="w-3.5 h-3.5 text-blue-400" />
               <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Antenna Sectors</span>
             </div>
@@ -744,8 +744,8 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
 
           {/* CPE specs */}
           {advancedMode && (
-            <details className="group border border-slate-850 rounded-lg bg-slate-950/20 overflow-hidden">
-              <summary className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase cursor-pointer flex justify-between items-center hover:bg-slate-950/40 transition">
+            <details className="group border border-white/10 rounded-xl bg-white/[0.02] overflow-hidden">
+              <summary className="px-3 py-2 text-[10px] uppercase tracking-widest font-semibold text-white/40 cursor-pointer flex justify-between items-center hover:bg-slate-950/40 transition">
                 <span>CPE client Config</span>
                 <Settings className="w-3.5 h-3.5 text-slate-500 group-open:rotate-90 transition duration-300" />
               </summary>
@@ -851,7 +851,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
 
           {/* System Margin — always visible */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+            <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40 flex items-center gap-1.5">
               System Margin (dB)
               <Tooltip content="Fading and reliability safety margin in dB. Higher values require stronger signal thresholds to declare coverage (Conservative vs Realistic)." />
             </label>
@@ -863,7 +863,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                 setRfPreset("manual");
               }}
               min={0}
-              className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
             />
           </div>
 
@@ -877,14 +877,14 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           {/* Coverage Probability — advanced only */}
           {advancedMode && (
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+              <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40 flex items-center gap-1.5">
                 Coverage Prob.
                 <Tooltip content="The probability that the required signal strength is achieved at any given location. 90% is industry standard." />
               </label>
               <select
                 value={coverageProbability}
                 onChange={(e) => setCoverageProbability(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
               >
                 <option value="50%">50% (Median)</option>
                 <option value="75%">75%</option>
@@ -898,7 +898,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           {/* OpenTopography Key */}
           {advancedMode && (
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1.5">
+              <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40 flex items-center gap-1.5">
                 OpenTopography Key
                 <Tooltip content="Your personal OpenTopography key to query terrain elevations. Leave empty to use the server's shared key." />
               </label>
@@ -907,7 +907,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                 placeholder="Uses server defaults if blank"
                 value={srtmKey}
                 onChange={(e) => setSrtmKey(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
               />
             </div>
           )}
