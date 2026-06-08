@@ -324,7 +324,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
   };
 
   return (
-    <aside className="w-[380px] bg-black/30 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-[0_0_40px_rgba(0,0,0,0.5)] flex flex-col h-full overflow-hidden">
+    <aside className="w-[320px] bg-black/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-[0_0_40px_rgba(0,0,0,0.5)] flex flex-col h-full overflow-hidden">
       {/* Sidebar Tabs (Segmented Control) */}
       <div className="p-4 flex justify-center border-b border-white/5">
         <div className="flex bg-black/40 backdrop-blur-md rounded-full p-1 border border-white/10 w-full max-w-[300px]">
