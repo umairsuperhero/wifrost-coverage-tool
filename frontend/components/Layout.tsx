@@ -1,5 +1,6 @@
 import React from "react";
-import { Wifi, User, HelpCircle } from "lucide-react";
+import { Wifi } from "lucide-react";
+import WhatsNewButton from "./WhatsNewButton";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -22,8 +23,10 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         </div>
 
-        {/* Marcelo Profile Greeting */}
+        {/* Marcelo Profile Greeting & What's New */}
         <div className="flex items-center space-x-6">
+          <WhatsNewButton />
+          
           <div className="flex items-center space-x-3 text-right">
             <div>
               <p className="text-xs text-slate-400">Sales Engineer</p>
