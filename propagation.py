@@ -83,31 +83,41 @@ def bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 
 def sector_gain(point_bearing: float, sector_azimuth: float,
-                hpbw: float, front_to_back_ratio: float) -> float:
+                point_elevation: float, mdt_deg: float,
+                hpbw: float, vpbw: float, front_to_back_ratio: float) -> float:
     """Return antenna gain offset in dB (0 = on-axis, negative = off-axis)."""
-    off_axis = abs(point_bearing - sector_azimuth) % 360
-    if off_axis > 180:
-        off_axis = 360 - off_axis
-    return -min(12.0 * (off_axis / hpbw) ** 2, front_to_back_ratio)
+    off_axis_h = abs(point_bearing - sector_azimuth) % 360
+    if off_axis_h > 180:
+        off_axis_h = 360 - off_axis_h
+    h_loss = 12.0 * (off_axis_h / hpbw) ** 2
+    
+    off_axis_v = point_elevation - (-mdt_deg)
+    v_loss = 12.0 * (off_axis_v / vpbw) ** 2
+    
+    return -min(h_loss + v_loss, front_to_back_ratio)
 
 
-def get_sector_gain_for_point(bts_lat: float, bts_lon: float,
-                               rx_lat: float, rx_lon: float,
-                               sector_azimuths: List[float],
-                               hpbw: float, front_to_back_ratio: float) -> float:
+def get_sector_gain_for_point(bts_lat: float, bts_lon: float, bts_z_asl: float,
+                               rx_lat: float, rx_lon: float, rx_z_asl: float,
+                               sector_azimuths: List[float], mdt_deg: float,
+                               hpbw: float, vpbw: float, front_to_back_ratio: float) -> float:
     """Return the best-sector gain (dB) from BTS toward a given point."""
     pt_bearing = bearing(bts_lat, bts_lon, rx_lat, rx_lon)
-    return max(sector_gain(pt_bearing, az, hpbw, front_to_back_ratio)
+    dist_m = haversine_distance(bts_lat, bts_lon, rx_lat, rx_lon) * 1000.0
+    pt_elevation = math.degrees(math.atan2(rx_z_asl - bts_z_asl, dist_m)) if dist_m > 0 else 0.0
+    return max(sector_gain(pt_bearing, az, pt_elevation, mdt_deg, hpbw, vpbw, front_to_back_ratio)
                for az in sector_azimuths)
 
 
-def best_sector_for_point(bts_lat: float, bts_lon: float,
-                           rx_lat: float, rx_lon: float,
-                           sector_azimuths: List[float],
-                           hpbw: float, front_to_back_ratio: float) -> int:
+def best_sector_for_point(bts_lat: float, bts_lon: float, bts_z_asl: float,
+                           rx_lat: float, rx_lon: float, rx_z_asl: float,
+                           sector_azimuths: List[float], mdt_deg: float,
+                           hpbw: float, vpbw: float, front_to_back_ratio: float) -> int:
     """Return the 0-based index of the sector that best serves the given point."""
     pt_bearing = bearing(bts_lat, bts_lon, rx_lat, rx_lon)
-    gains = [sector_gain(pt_bearing, az, hpbw, front_to_back_ratio)
+    dist_m = haversine_distance(bts_lat, bts_lon, rx_lat, rx_lon) * 1000.0
+    pt_elevation = math.degrees(math.atan2(rx_z_asl - bts_z_asl, dist_m)) if dist_m > 0 else 0.0
+    gains = [sector_gain(pt_bearing, az, pt_elevation, mdt_deg, hpbw, vpbw, front_to_back_ratio)
              for az in sector_azimuths]
     return gains.index(max(gains))
 

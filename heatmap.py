@@ -139,20 +139,32 @@ def bearing_np(lat1: float, lon1: float, lat2_arr: np.ndarray, lon2_arr: np.ndar
 
 
 def sector_gain_np(point_bearing: np.ndarray, sector_azimuth: float,
-                   hpbw: float, front_to_back_ratio: float) -> np.ndarray:
+                   point_elevation: np.ndarray, mdt_deg: float,
+                   hpbw: float, vpbw: float, front_to_back_ratio: float) -> np.ndarray:
     """Vectorized antenna sector gain offset in dB."""
-    off_axis = np.abs(point_bearing - sector_azimuth) % 360.0
-    off_axis = np.where(off_axis > 180.0, 360.0 - off_axis, off_axis)
-    return -np.minimum(12.0 * (off_axis / hpbw) ** 2, front_to_back_ratio)
+    off_axis_h = np.abs(point_bearing - sector_azimuth) % 360.0
+    off_axis_h = np.where(off_axis_h > 180.0, 360.0 - off_axis_h, off_axis_h)
+    h_loss = 12.0 * (off_axis_h / hpbw) ** 2
+    
+    off_axis_v = point_elevation - (-mdt_deg)
+    v_loss = 12.0 * (off_axis_v / vpbw) ** 2
+    
+    return -np.minimum(h_loss + v_loss, front_to_back_ratio)
 
 
-def get_sector_gain_for_point_np(bts_lat: float, bts_lon: float,
-                                 rx_lat: np.ndarray, rx_lon: np.ndarray,
-                                 sector_azimuths: List[float],
-                                 hpbw: float, front_to_back_ratio: float) -> np.ndarray:
+def get_sector_gain_for_point_np(bts_lat: float, bts_lon: float, bts_z_asl: float,
+                                 rx_lat: np.ndarray, rx_lon: np.ndarray, rx_z_asl: np.ndarray,
+                                 sector_azimuths: List[float], mdt_deg: float,
+                                 hpbw: float, vpbw: float, front_to_back_ratio: float) -> np.ndarray:
     """Vectorized best-sector gain from BTS toward all grid cells."""
     pt_bearing = bearing_np(bts_lat, bts_lon, rx_lat, rx_lon)
-    gains = [sector_gain_np(pt_bearing, az, hpbw, front_to_back_ratio) for az in sector_azimuths]
+    dist_m = haversine_distance_np(bts_lat, bts_lon, rx_lat, rx_lon) * 1000.0
+    
+    # Avoid division by zero warnings where distance is 0
+    safe_dist = np.where(dist_m > 0, dist_m, 1.0)
+    pt_elevation = np.where(dist_m > 0, np.degrees(np.arctan2(rx_z_asl - bts_z_asl, safe_dist)), 0.0)
+    
+    gains = [sector_gain_np(pt_bearing, az, pt_elevation, mdt_deg, hpbw, vpbw, front_to_back_ratio) for az in sector_azimuths]
     return np.maximum.reduce(gains)
 
 
@@ -262,6 +274,8 @@ def compute_coverage_grid(bts_site: Any, equipment_bts: Any, equipment_cpe: Any,
     n_sectors = getattr(equipment_bts, 'default_sectors', 1)
     raw_azimuths = getattr(equipment_bts, 'sector_azimuths', [0])
     hpbw = getattr(equipment_bts, 'horizontal_beamwidth', 90.0)
+    vpbw = getattr(equipment_bts, 'vpbw_deg', 17.0)
+    mdt_deg = getattr(equipment_bts, 'mdt_deg', 6.0)
     ftb = getattr(equipment_bts, 'front_to_back_ratio', 25.0)
     active_azimuths = raw_azimuths[:max(1, n_sectors)] if raw_azimuths else None
 
@@ -355,9 +369,10 @@ def compute_coverage_grid(bts_site: Any, equipment_bts: Any, equipment_cpe: Any,
     # Sector Gain
     sg_db = np.zeros((nrows, ncols))
     if active_azimuths:
-        sg_db = get_sector_gain_for_point_np(bts_lat, bts_lon, lats_2d, lons_2d,
-                                             active_azimuths, hpbw, ftb)
-
+        sg_db = get_sector_gain_for_point_np(bts_lat, bts_lon, bts_ground + bts_height,
+                                             lats_2d, lons_2d, rx_grounds + cpe_height,
+                                             active_azimuths, mdt_deg, hpbw, vpbw, ftb)
+    
     # Final RSSI array
     rssi_array = eirp_dbm - loss_array + rx_gain - rx_loss + sg_db
 
@@ -465,6 +480,7 @@ def compute_cpe_analysis(bts_site: Any, cpe_sites: List[Any],
     bts_lat = bts_site.latitude
     bts_lon = bts_site.longitude
     bts_height = bts_height_override if bts_height_override is not None else bts_site.height_m
+    bts_ground = get_elevation(terrain_grid, bts_lat, bts_lon) if not terrain_grid.is_flat else 0.0
 
     eirp = compute_eirp(equipment_bts.tx_power_dbm,
                         equipment_bts.antenna_gain_dbi,
@@ -473,8 +489,10 @@ def compute_cpe_analysis(bts_site: Any, cpe_sites: List[Any],
     n_sectors = getattr(equipment_bts, 'default_sectors', 1)
     raw_azimuths = getattr(equipment_bts, 'sector_azimuths', [0])
     hpbw = getattr(equipment_bts, 'horizontal_beamwidth', 90.0)
+    vpbw = getattr(equipment_bts, 'vpbw_deg', 17.0)
+    mdt_deg = getattr(equipment_bts, 'mdt_deg', 6.0)
     ftb = getattr(equipment_bts, 'front_to_back_ratio', 25.0)
-    active_azimuths = raw_azimuths[:n_sectors] if n_sectors > 1 else None
+    active_azimuths = raw_azimuths[:max(1, n_sectors)] if raw_azimuths else None
 
     sigma = ENVIRONMENT_SIGMA.get(environment, 4.0)
     shad_90 = shadowing_margin(0.90, sigma)
@@ -488,12 +506,17 @@ def compute_cpe_analysis(bts_site: Any, cpe_sites: List[Any],
                 d_km = 0.01
 
             pt_bearing = bearing(bts_lat, bts_lon, cpe.latitude, cpe.longitude)
+            s_lat, s_lon = cpe.latitude, cpe.longitude
+            rx_z = get_elevation(terrain_grid, s_lat, s_lon) if not terrain_grid.is_flat else 0.0
+            distance_km = d_km
 
             if active_azimuths:
-                best_sec = best_sector_for_point(bts_lat, bts_lon,
-                                                  cpe.latitude, cpe.longitude,
-                                                  active_azimuths, hpbw, ftb)
-                sg_db = sector_gain(pt_bearing, active_azimuths[best_sec], hpbw, ftb)
+                best_sec = best_sector_for_point(bts_lat, bts_lon, bts_ground + bts_height,
+                                                 s_lat, s_lon, rx_z + cpe.height_m,
+                                                 active_azimuths, mdt_deg, hpbw, vpbw, ftb)
+                dist_m = distance_km * 1000.0
+                pt_elevation = math.degrees(math.atan2((rx_z + cpe.height_m) - (bts_ground + bts_height), dist_m)) if dist_m > 0 else 0.0
+                sg_db = sector_gain(pt_bearing, active_azimuths[best_sec], pt_elevation, mdt_deg, hpbw, vpbw, ftb)
             else:
                 best_sec = 0
                 sg_db = 0.0

@@ -82,6 +82,7 @@ class SimulateRequest(BaseModel):
     sector_azimuths: List[float] = [0]
     hpbw_deg: float = 65.0
     vpbw_deg: float = 17.0
+    mdt_deg: float = 6.0
     front_to_back_db: float = 25.0
 
 class CpeAnalysisRequest(BaseModel):
@@ -104,6 +105,8 @@ class CpeAnalysisRequest(BaseModel):
     # Sector antenna configuration
     sector_azimuths: List[float] = [0]
     hpbw_deg: float = 65.0
+    vpbw_deg: float = 17.0
+    mdt_deg: float = 6.0
     front_to_back_db: float = 25.0
 
 class GenerateReportRequest(BaseModel):
@@ -422,6 +425,7 @@ def simulate(req: SimulateRequest):
         "sector_azimuths": req.sector_azimuths,
         "hpbw_deg": req.hpbw_deg,
         "vpbw_deg": req.vpbw_deg,
+        "mdt_deg": req.mdt_deg,
         "front_to_back_db": req.front_to_back_db,
     }, sort_keys=True).encode()).hexdigest()
     
@@ -622,12 +626,15 @@ def cpe_analysis(req: CpeAnalysisRequest):
             pt_bearing = calc_bearing(bts["latitude"], bts["longitude"],
                                        s["latitude"], s["longitude"])
             best_sec_i = best_sector_for_point(
-                bts["latitude"], bts["longitude"],
-                s["latitude"], s["longitude"],
-                req.sector_azimuths, req.hpbw_deg, req.front_to_back_db
+                bts["latitude"], bts["longitude"], req.bts_height,
+                s["latitude"], s["longitude"], cpe_height,
+                req.sector_azimuths, req.mdt_deg, req.hpbw_deg, req.vpbw_deg, req.front_to_back_db
             )
-            sg_db = sector_gain(pt_bearing, req.sector_azimuths[best_sec_i],
-                                req.hpbw_deg, req.front_to_back_db)
+            
+            dist_m = d_km * 1000.0
+            pt_elevation = math.degrees(math.atan2(cpe_height - req.bts_height, dist_m)) if dist_m > 0 else 0.0
+            sg_db = sector_gain(pt_bearing, req.sector_azimuths[best_sec_i], pt_elevation, req.mdt_deg,
+                                req.hpbw_deg, req.vpbw_deg, req.front_to_back_db)
 
             rssi = compute_rssi(loss_db, eirp, req.rx_gain_dbi, req.rx_cable_loss_db, sg_db)
             margin = rssi - req.rx_sensitivity_dbm
@@ -705,6 +712,7 @@ def generate_report(req: GenerateReportRequest):
         "sector_azimuths": sim_params.sector_azimuths,
         "hpbw_deg": sim_params.hpbw_deg,
         "vpbw_deg": sim_params.vpbw_deg,
+        "mdt_deg": getattr(sim_params, 'mdt_deg', 6.0),
         "front_to_back_db": sim_params.front_to_back_db,
     }, sort_keys=True).encode()).hexdigest()
     

@@ -189,6 +189,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
   const [sectorAzimuths, setSectorAzimuths] = useState<number[]>([0]);
   const [hpbw, setHpbw] = useState<number>(65.0);
   const [vpbw, setVpbw] = useState<number>(17.0);
+  const [mdtDeg, setMdtDeg] = useState<number>(6.0);
   const [ftb, setFtb] = useState<number>(25.0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -297,6 +298,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
       sector_azimuths: sectorAzimuths.slice(0, sectorCount),
       hpbw_deg: hpbw,
       vpbw_deg: vpbw,
+      mdt_deg: mdtDeg,
       front_to_back_db: ftb,
     });
   };
@@ -721,6 +723,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                   {[
                     { label: "H-plane HPBW (°)", val: hpbw, set: setHpbw },
                     { label: "V-plane VPBW (°)", val: vpbw, set: setVpbw },
+                    { label: "Mech. Downtilt (°)", val: mdtDeg, set: setMdtDeg },
                     { label: "Front/Back (dB)",  val: ftb,  set: setFtb  },
                   ].map(({ label, val, set }) => (
                     <div key={label} className="flex items-center justify-between gap-2">
