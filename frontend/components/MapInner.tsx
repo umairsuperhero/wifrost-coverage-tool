@@ -133,6 +133,7 @@ interface MapInnerProps {
   setMapTheme?: (theme: "dark" | "satellite" | "street") => void;
   measurePoints?: [number, number][];
   setMeasurePoints?: (points: [number, number][]) => void;
+  isSidebarExpanded?: boolean;
 }
 
 function sectorPolygon(
@@ -183,6 +184,7 @@ export default function MapInner({
   setMapTheme,
   measurePoints = [],
   setMeasurePoints,
+  isSidebarExpanded = true,
 }: MapInnerProps) {
   // Default center Buonaventura Colombia (SPRBUN)
   const defaultCenter: [number, number] = [3.89, -77.08];
@@ -513,8 +515,10 @@ export default function MapInner({
         </select>
       </div>
 
-      {/* Map Legend Overlay */}
-      <div className="absolute bottom-4 left-4 z-[1000] p-3 rounded-lg border border-slate-800 bg-slate-900/90 backdrop-blur text-xs text-slate-300 space-y-2 max-w-[200px]">
+      {/* Legend & Controls */}
+      <div className={`absolute bottom-6 z-[1000] p-3 rounded-xl border border-white/10 bg-slate-950/85 backdrop-blur-2xl text-xs text-slate-300 space-y-2 max-w-[200px] shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        isSidebarExpanded ? "left-[360px]" : "left-[96px]"
+      }`}>
         <h4 className="font-bold text-white text-[10px] uppercase tracking-wider">Legend</h4>
         <div className="space-y-1.5">
           <div className="flex items-center gap-2">

@@ -14,7 +14,7 @@ import ModelInfoPanel from "../components/ModelInfoPanel";
 import LinkBudget from "../components/LinkBudget";
 import CpeSummaryBar from "../components/CpeSummaryBar";
 import RunSummaryBar from "../components/RunSummaryBar";
-import { Compass, HelpCircle, AlertCircle, Signal, CheckCircle, AlertTriangle } from "lucide-react";
+import { Compass, HelpCircle, AlertCircle, Signal, CheckCircle, AlertTriangle, X } from "lucide-react";
 import axios from "axios";
 
 // One automatic retry on network/5xx errors — handles Cloud Run cold-start 503 (scales to zero)
@@ -144,6 +144,10 @@ export default function Home() {
   // View States
   const [activeScenario, setActiveScenario] = useState<"best" | "realistic" | "conservative">("realistic");
   const [activeTab, setActiveTab] = useState<"analysis" | "model">("analysis");
+  const [showResultsPanel, setShowResultsPanel] = useState<boolean>(false);
+  const [isTerrainModalOpen, setIsTerrainModalOpen] = useState<boolean>(false);
+  const [isLeftExpanded, setIsLeftExpanded] = useState<boolean>(true);
+  const [resultsTab, setResultsTab] = useState<"overview" | "clients" | "link">("overview");
 
   // Loading States
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -198,6 +202,8 @@ export default function Home() {
     modelOverride?: string
   ) => {
     setSelectedCpe(cpe);
+    setShowResultsPanel(true);
+    setResultsTab("link");
     setIsProfileLoading(true);
 
     let activeBtsIdx = btsIndexOverride !== undefined ? btsIndexOverride : selectedBtsIndex;
@@ -233,7 +239,7 @@ export default function Home() {
     } finally {
       setIsProfileLoading(false);
     }
-  }, [selectedBtsIndex, parsedData.sites, activeSimulationParams]);
+  }, [selectedBtsIndex, parsedData.sites, activeSimulationParams, setResultsTab, setShowResultsPanel]);
 
   const handleSimulate = useCallback(async (params: any, overrideSites?: any[]) => {
     setIsLoading(true);
@@ -296,6 +302,8 @@ export default function Home() {
 
       setActiveSimulationParams(simulationParamsContext);
       setSimulationResults(simRes.data);
+      setShowResultsPanel(true);
+      setResultsTab("overview");
       setSelectedBtsIndex(params.site_index);
 
       // Record this run so the UI can show what was run, when, and how it
@@ -552,6 +560,8 @@ export default function Home() {
         plain_english_result: result.plain_english_result,
         three_scenarios: result.three_scenarios
       });
+      setShowResultsPanel(true);
+      setResultsTab("overview");
       
       // Load CPE results on the fly
       try {
@@ -641,6 +651,9 @@ export default function Home() {
           onSectorChange={(azimuths, hpbw) => setLiveSector({ azimuths, hpbw })}
           onLoadHistoryRun={handleLoadHistoryRun}
           showToast={showToast}
+          isExpanded={isLeftExpanded}
+          onToggleExpanded={setIsLeftExpanded}
+          terrainLoaded={simulationResults?.stats?.terrain_loaded}
         />
       </div>
 
@@ -678,6 +691,7 @@ export default function Home() {
           setMapTheme={setMapTheme}
           measurePoints={measurePoints}
           setMeasurePoints={setMeasurePoints}
+          isSidebarExpanded={isLeftExpanded}
         />
       </div>
 
@@ -699,179 +713,260 @@ export default function Home() {
               </div>
             </div>
           ) : (
-            /* Bottom Overlays (Floating Glass Cards) */
-            <div className="absolute top-24 bottom-6 left-[360px] right-6 flex flex-col justify-end pointer-events-none">
-              <div className="w-full max-w-[1400px] ml-auto space-y-3 pointer-events-auto max-h-full overflow-y-auto pr-2 custom-scrollbar transform scale-90 xl:scale-95 2xl:scale-100 origin-bottom-right">
-              {isLoading && slowStart && (
-                <div className="flex flex-col items-center gap-2 mt-4 text-center bg-slate-950/85 backdrop-blur-2xl rounded-2xl p-4 border border-white/10">
-                  <p className="text-sm text-amber-400 font-medium drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]">⏳ Still working…</p>
-                  <p className="text-xs text-slate-300 max-w-xs">
-                    Large coverage areas or many sites can take a little longer to
-                    compute. If the backend was idle it may be cold-starting — hang tight.
-                  </p>
-                </div>
-              )}
-              {simulationResults ? (
-                <>
-                  {/* Horizontal Dock Layout */}
-                  <div className="flex flex-col 2xl:flex-row gap-3 items-end justify-end">
-                    {/* Left side of dock: Info & Banner */}
-                    <div className="flex flex-col gap-3 w-full 2xl:w-[400px] shrink-0">
-                      <RunSummaryBar
-                        runCount={runCount}
-                        lastRunAt={lastRunAt}
-                        isLoading={isLoading}
-                        projectName={fileName.replace(/\.[^/.]+$/, "")}
-                        btsName={
-                          selectedBtsIndex === -1
-                            ? "All towers"
-                            : parsedData.sites.filter((s) => s.is_bts_candidate)[selectedBtsIndex]?.name
-                        }
-                        frequencyMhz={activeSimulationParams?.frequency_mhz}
-                        model={activeSimulationParams?.model}
-                        environment={simulationResults.stats.environment_used ?? activeSimulationParams?.environment}
-                        environmentAuto={simulationResults.stats.environment_auto}
-                        eirpDbm={activeSimulationParams?.eirp_dbm}
-                        systemMarginDb={activeSimulationParams?.system_margin_db}
-                        terrainLoaded={simulationResults.stats.terrain_loaded}
-                        landcoverLoaded={simulationResults.stats.landcover_loaded}
-                      />
-
-                      <ResultsBanner
-                        plainEnglishResult={simulationResults.plain_english_result}
-                        coveragePct={simulationResults.stats.coverage_pct}
-                        projectName={fileName.replace(/\.[^/.]+$/, "")}
-                        activeSimulationParams={activeSimulationParams}
-                        stats={simulationResults.stats}
-                        threeScenarios={simulationResults.three_scenarios}
-                        cpeResults={cpeResults}
-                        showToast={showToast}
-                      />
-                    </div>
-
-                    {/* Right side of dock: Scenarios */}
-                    <div className="flex-1 w-full shrink-0 min-w-0">
-                      <MetricsRow
-                        threeScenarios={simulationResults.three_scenarios}
-                        activeScenarioName={activeScenario}
-                        onScenarioChange={setActiveScenario}
-                      />
-                    </div>
+            /* Results HUD (Right-Aligned Glass Panel) */
+            <div className="absolute top-24 bottom-6 right-6 z-20 flex items-start gap-4 pointer-events-none h-[calc(100vh-8rem)]">
+              
+              {/* The Panel */}
+              <div
+                className={`transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden h-full pointer-events-auto flex flex-col ${
+                  showResultsPanel ? "w-[420px] opacity-100 scale-100" : "w-0 opacity-0 scale-95 origin-right"
+                }`}
+              >
+                <aside className="w-[420px] bg-slate-950/85 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] shadow-[0_0_40px_rgba(0,0,0,0.5)] flex flex-col h-full overflow-hidden shrink-0">
+                  {/* Header */}
+                  <div className="p-5 flex justify-between items-center border-b border-white/5 shrink-0 bg-slate-900/50">
+                    <h2 className="text-[13px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <Signal className="w-4 h-4 text-emerald-400" />
+                      Simulation Results
+                    </h2>
+                    <button
+                      onClick={() => setShowResultsPanel(false)}
+                      className="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-all duration-300"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
                   </div>
 
-                  {/* P2MP / manual-CPE controls */}
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <button
-                      onClick={() => setMapMode(mapMode === "addcpe" ? "normal" : "addcpe")}
-                      className={`inline-flex items-center gap-2 text-[11px] uppercase tracking-wider font-semibold px-4 py-1.5 rounded-full border transition-all duration-300 ${
-                        mapMode === "addcpe"
-                          ? "bg-blue-500/20 border-blue-500/50 text-blue-200 shadow-[0_0_12px_rgba(59,130,246,0.3)]"
-                          : "bg-white/5 border-white/10 text-white/70 hover:text-white hover:bg-white/10"
-                      }`}
-                      title="Toggle add-CPE mode, then click the map to drop client sites for point-to-multipoint analysis"
-                    >
-                      📍 {mapMode === "addcpe" ? "Click map to drop CPE…" : "Add CPE (P2MP)"}
-                    </button>
-                    {manualCpeCount > 0 && (
-                      <button
-                        onClick={handleClearManualCpes}
-                        className="text-[11px] uppercase tracking-wider font-semibold px-4 py-1.5 rounded-full border border-white/10 bg-white/5 text-white/40 hover:text-red-300 hover:border-red-500/30 hover:bg-red-500/10 transition-all duration-300"
-                      >
-                        Clear {manualCpeCount} manual CPE{manualCpeCount > 1 ? "s" : ""}
-                      </button>
+                  {/* Tabs bar */}
+                  {simulationResults && (
+                    <div className="px-5 pt-4 shrink-0 bg-slate-950/20">
+                      <div className="flex bg-black/40 border border-white/5 rounded-xl p-0.5 gap-0.5">
+                        <button
+                          onClick={() => setResultsTab("overview")}
+                          className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 cursor-pointer ${
+                            resultsTab === "overview"
+                              ? "bg-white/10 text-white shadow-sm"
+                              : "text-white/40 hover:text-white/70"
+                          }`}
+                        >
+                          Overview
+                        </button>
+                        <button
+                          onClick={() => cpeResults.length > 0 && setResultsTab("clients")}
+                          disabled={cpeResults.length === 0}
+                          className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 cursor-pointer ${
+                            resultsTab === "clients"
+                              ? "bg-white/10 text-white shadow-sm"
+                              : cpeResults.length === 0
+                              ? "text-white/15 cursor-not-allowed"
+                              : "text-white/40 hover:text-white/70"
+                          }`}
+                        >
+                          Clients
+                        </button>
+                        <button
+                          onClick={() => selectedCpe && setResultsTab("link")}
+                          disabled={!selectedCpe}
+                          className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 cursor-pointer ${
+                            resultsTab === "link"
+                              ? "bg-white/10 text-white shadow-sm"
+                              : !selectedCpe
+                              ? "text-white/15 cursor-not-allowed"
+                              : "text-white/40 hover:text-white/70"
+                          }`}
+                        >
+                          Path Link
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Body */}
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 space-y-5 custom-scrollbar">
+                    {isLoading && slowStart && (
+                      <div className="flex flex-col items-center gap-2 text-center bg-slate-900/50 rounded-2xl p-4 border border-white/10">
+                        <p className="text-sm text-amber-400 font-medium drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]">⏳ Still working…</p>
+                        <p className="text-xs text-slate-300">
+                          Large areas or many sites take longer to compute.
+                        </p>
+                      </div>
+                    )}
+                    
+                    {simulationResults && (
+                      <>
+                        {/* Tab 1: Overview */}
+                        {resultsTab === "overview" && (
+                          <div className="space-y-5">
+                            <ResultsBanner
+                              plainEnglishResult={simulationResults.plain_english_result}
+                              coveragePct={simulationResults.stats.coverage_pct}
+                              projectName={fileName.replace(/\.[^/.]+$/, "")}
+                              activeSimulationParams={activeSimulationParams}
+                              stats={simulationResults.stats}
+                              threeScenarios={simulationResults.three_scenarios}
+                              cpeResults={cpeResults}
+                              showToast={showToast}
+                            />
+                            <MetricsRow
+                              threeScenarios={simulationResults.three_scenarios}
+                              activeScenarioName={activeScenario}
+                              onScenarioChange={setActiveScenario}
+                            />
+                            <RunSummaryBar
+                              runCount={runCount}
+                              lastRunAt={lastRunAt}
+                              isLoading={isLoading}
+                              projectName={fileName.replace(/\.[^/.]+$/, "")}
+                              btsName={
+                                selectedBtsIndex === -1
+                                  ? "All towers"
+                                  : parsedData.sites.filter((s) => s.is_bts_candidate)[selectedBtsIndex]?.name
+                              }
+                              frequencyMhz={activeSimulationParams?.frequency_mhz}
+                              model={activeSimulationParams?.model}
+                              environment={simulationResults.stats.environment_used ?? activeSimulationParams?.environment}
+                              environmentAuto={simulationResults.stats.environment_auto}
+                              eirpDbm={activeSimulationParams?.eirp_dbm}
+                              systemMarginDb={activeSimulationParams?.system_margin_db}
+                              terrainLoaded={simulationResults.stats.terrain_loaded}
+                              landcoverLoaded={simulationResults.stats.landcover_loaded}
+                            />
+                          </div>
+                        )}
+
+                        {/* Tab 2: Clients */}
+                        {resultsTab === "clients" && (
+                          <div className="space-y-5">
+                            {/* P2MP / manual-CPE controls */}
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                              <button
+                                onClick={() => setMapMode(mapMode === "addcpe" ? "normal" : "addcpe")}
+                                className={`inline-flex items-center gap-2 text-[11px] uppercase tracking-wider font-semibold px-4 py-1.5 rounded-full border transition-all duration-300 ${
+                                  mapMode === "addcpe"
+                                    ? "bg-blue-500/20 border-blue-500/50 text-blue-200 shadow-[0_0_12px_rgba(59,130,246,0.3)]"
+                                    : "bg-white/5 border-white/10 text-white/70 hover:text-white hover:bg-white/10"
+                                }`}
+                                title="Toggle add-CPE mode, then click the map to drop client sites for point-to-multipoint analysis"
+                              >
+                                📍 {mapMode === "addcpe" ? "Click map to drop CPE…" : "Add CPE (P2MP)"}
+                              </button>
+                              {manualCpeCount > 0 && (
+                                <button
+                                  onClick={handleClearManualCpes}
+                                  className="text-[11px] uppercase tracking-wider font-semibold px-4 py-1.5 rounded-full border border-white/10 bg-white/5 text-white/40 hover:text-red-300 hover:border-red-500/30 hover:bg-red-500/10 transition-all duration-300"
+                                >
+                                  Clear {manualCpeCount} manual CPE{manualCpeCount > 1 ? "s" : ""}
+                                </button>
+                              )}
+                            </div>
+
+                            {/* CPE Summary Bar — only when CPE results exist */}
+                            {cpeResults.length > 0 && (
+                              <CpeSummaryBar cpeResults={cpeResults} />
+                            )}
+
+                            {/* CPE Table — only when CPE results exist */}
+                            {cpeResults.length > 0 && (
+                              <CpeTable
+                                cpeResults={cpeResults}
+                                selectedCpeName={selectedCpe?.name || null}
+                                onSelectCpe={(cpe) => handleSelectCpe(cpe)}
+                                sectorCount={activeSimulationParams?.sector_azimuths?.length ?? 1}
+                              />
+                            )}
+                          </div>
+                        )}
+
+                        {/* Tab 3: Path Link */}
+                        {resultsTab === "link" && (
+                          <div className="space-y-5">
+                            {selectedCpe && (
+                              <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-4 flex items-center justify-between text-xs">
+                                <span className="font-semibold text-white">Active Link: {selectedCpe.name}</span>
+                                <span className="text-[10px] text-slate-400 bg-white/5 border border-white/10 rounded-full px-2 py-0.5">
+                                  Serving BTS: {selectedCpe.serving_bts_name || "Tower"}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Elevation profile chart */}
+                            {isProfileLoading ? (
+                              <div className="bg-black/40 backdrop-blur-3xl rounded-xl border border-white/5 p-5 flex flex-col items-center justify-center h-[340px] text-white/40">
+                                <span className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mb-2 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                                <p className="text-[11px] uppercase tracking-wider font-semibold">Generating terrain profile...</p>
+                              </div>
+                            ) : (
+                              (() => {
+                                const btsCandidates = parsedData.sites.filter((s) => s.is_bts_candidate);
+                                const activeBtsForProfile = selectedBtsIndex === -1 && selectedCpe?.serving_bts_index !== undefined
+                                  ? btsCandidates[selectedCpe.serving_bts_index]
+                                  : btsCandidates[selectedBtsIndex];
+
+                                const btsLatForProfile = selectedCpe?.name === "Measured Path" && measurePoints.length > 0
+                                  ? measurePoints[0][0]
+                                  : activeBtsForProfile?.latitude;
+                                const btsLonForProfile = selectedCpe?.name === "Measured Path" && measurePoints.length > 0
+                                  ? measurePoints[0][1]
+                                  : activeBtsForProfile?.longitude;
+
+                                return (
+                                  <TerrainChart
+                                    profileData={terrainProfile?.profile || []}
+                                    label={terrainProfile?.label || ""}
+                                    isFlat={terrainProfile?.is_flat || false}
+                                    cpeName={selectedCpe?.name || "CPE"}
+                                    btsElevation={terrainProfile?.bts_elevation}
+                                    cpeElevation={terrainProfile?.cpe_elevation}
+                                    btsTotalHeight={terrainProfile?.bts_total_height}
+                                    cpeTotalHeight={terrainProfile?.cpe_total_height}
+                                    btsLat={btsLatForProfile}
+                                    btsLon={btsLonForProfile}
+                                    cpeLat={selectedCpe?.latitude}
+                                    cpeLon={selectedCpe?.longitude}
+                                    onHoverPoint={setHoverPoint}
+                                    onMaximize={() => setIsTerrainModalOpen(true)}
+                                  />
+                                );
+                              })()
+                            )}
+
+                            {/* Link Budget Panel */}
+                            <LinkBudget
+                              txPowerDbm={activeSimulationParams?.tx_power_dbm ?? 23.0}
+                              antennaGainDbi={activeSimulationParams?.antenna_gain_dbi ?? 13.0}
+                              cableLossDb={activeSimulationParams?.cable_loss_db ?? 1.5}
+                              cpeGainDbi={activeSimulationParams?.rx_gain_dbi ?? 10.0}
+                              cpeCableLossDb={activeSimulationParams?.rx_cable_loss_db ?? 0.5}
+                              cpeSensitivityDbm={activeSimulationParams?.cpe_sensitivity ?? -92.0}
+                              systemMarginDb={activeSimulationParams?.system_margin_db ?? 10.0}
+                              frequencyMhz={activeSimulationParams?.frequency_mhz ?? 600.0}
+                              maxRangeKm={simulationResults.stats.max_range_km ?? null}
+                            />
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
+                </aside>
+          </div>
 
-                  {/* CPE Summary Bar — only when CPE results exist */}
-                  {cpeResults.length > 0 && (
-                    <CpeSummaryBar cpeResults={cpeResults} />
-                  )}
-
-                  {/* CPE Table — only when CPE results exist */}
-                  {cpeResults.length > 0 && (
-                    <CpeTable
-                      cpeResults={cpeResults}
-                      selectedCpeName={selectedCpe?.name || null}
-                      onSelectCpe={(cpe) => handleSelectCpe(cpe)}
-                      sectorCount={activeSimulationParams?.sector_azimuths?.length ?? 1}
-                    />
-                  )}
-
-                  {/* Elevation profile chart */}
-                  {isProfileLoading ? (
-                    <div className="bg-black/40 backdrop-blur-3xl rounded-xl border border-white/5 p-5 flex flex-col items-center justify-center h-[340px] text-white/40">
-                      <span className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mb-2 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
-                      <p className="text-[11px] uppercase tracking-wider font-semibold">Generating terrain profile...</p>
-                    </div>
-                  ) : (
-                    (() => {
-                      const btsCandidates = parsedData.sites.filter((s) => s.is_bts_candidate);
-                      const activeBtsForProfile = selectedBtsIndex === -1 && selectedCpe?.serving_bts_index !== undefined
-                        ? btsCandidates[selectedCpe.serving_bts_index]
-                        : btsCandidates[selectedBtsIndex];
-
-                      const btsLatForProfile = selectedCpe?.name === "Measured Path" && measurePoints.length > 0
-                        ? measurePoints[0][0]
-                        : activeBtsForProfile?.latitude;
-                      const btsLonForProfile = selectedCpe?.name === "Measured Path" && measurePoints.length > 0
-                        ? measurePoints[0][1]
-                        : activeBtsForProfile?.longitude;
-
-                      return (
-                        <TerrainChart
-                          profileData={terrainProfile?.profile || []}
-                          label={terrainProfile?.label || ""}
-                          isFlat={terrainProfile?.is_flat || false}
-                          cpeName={selectedCpe?.name || "CPE"}
-                          btsElevation={terrainProfile?.bts_elevation}
-                          cpeElevation={terrainProfile?.cpe_elevation}
-                          btsTotalHeight={terrainProfile?.bts_total_height}
-                          cpeTotalHeight={terrainProfile?.cpe_total_height}
-                          btsLat={btsLatForProfile}
-                          btsLon={btsLonForProfile}
-                          cpeLat={selectedCpe?.latitude}
-                          cpeLon={selectedCpe?.longitude}
-                          onHoverPoint={setHoverPoint}
-                        />
-                      );
-                    })()
-                  )}
-
-                  {/* Link Budget Panel */}
-                  <LinkBudget
-                    txPowerDbm={activeSimulationParams?.tx_power_dbm ?? 23.0}
-                    antennaGainDbi={activeSimulationParams?.antenna_gain_dbi ?? 13.0}
-                    cableLossDb={activeSimulationParams?.cable_loss_db ?? 1.5}
-                    cpeGainDbi={activeSimulationParams?.rx_gain_dbi ?? 10.0}
-                    cpeCableLossDb={activeSimulationParams?.rx_cable_loss_db ?? 0.5}
-                    cpeSensitivityDbm={activeSimulationParams?.cpe_sensitivity ?? -92.0}
-                    systemMarginDb={activeSimulationParams?.system_margin_db ?? 10.0}
-                    frequencyMhz={activeSimulationParams?.frequency_mhz ?? 600.0}
-                    maxRangeKm={simulationResults.stats.max_range_km ?? null}
-                  />
-                </>
-              ) : (
-                /* Post-load, Pre-simulation Help Message */
-                <div className="p-6 bg-black/40 backdrop-blur-3xl border border-white/10 rounded-3xl flex items-start gap-4 shadow-2xl">
-                  <div className="p-3 bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-2xl shadow-[0_0_12px_rgba(59,130,246,0.4)]">
-                    <Signal className="w-6 h-6 animate-pulse" />
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold text-white tracking-tight">Layout loaded successfully</h3>
-                    <p className="text-sm text-white/60 leading-relaxed max-w-xl">
-                      Your layout file <b className="text-white/90">{fileName}</b> contains <b className="text-white/90">{parsedData.sites.length} sites</b> and{" "}
-                      <b className="text-white/90">{parsedData.polygons.length} boundary polygons</b>.
-                    </p>
-                    <p className="text-sm text-white/50 leading-relaxed max-w-xl">
-                      Choose an active BTS tower in the dropdown list, adjust equipment specifications, and click <b className="text-white/80">Run Simulation</b> on the sidebar to compute coverage maps, path loss, and link budgets.
-                    </p>
-                  </div>
-                </div>
-              )}
-              </div>
+          {/* Right Ornament (Toggle Button) */}
+          {simulationResults && (
+            <div className="flex flex-col items-center gap-4 bg-slate-950/85 backdrop-blur-2xl border border-white/10 rounded-full p-2 py-4 pointer-events-auto shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-300">
+              <button
+                onClick={() => setShowResultsPanel(!showResultsPanel)}
+                title="Toggle Results Panel"
+                className={`p-3 rounded-full transition-all duration-300 ${
+                  showResultsPanel ? "bg-emerald-600 shadow-[0_0_15px_rgba(16,185,129,0.5)] text-white" : "text-slate-400 hover:text-white hover:bg-white/10 animate-pulse"
+                }`}
+              >
+                <Signal className="w-5 h-5" />
+              </button>
             </div>
           )}
         </div>
+      )}
+    </div>
       </main>
 
       {/* Slide-in Toast Notification */}
@@ -887,6 +982,53 @@ export default function Home() {
           {toast.type === "error" && <AlertCircle className="w-5 h-5 text-red-400" />}
           {toast.type === "warning" && <AlertTriangle className="w-5 h-5 text-amber-400" />}
           <span className="text-sm font-semibold text-white">{toast.message}</span>
+        </div>
+      )}
+
+      {/* Maximize Terrain Chart Modal Overlay */}
+      {isTerrainModalOpen && (
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 md:p-8">
+          <div className="bg-slate-950/90 border border-white/10 rounded-[2rem] p-6 shadow-[0_0_50px_rgba(0,0,0,0.6)] w-full max-w-4xl relative backdrop-blur-2xl animate-fade-in-up">
+            <button
+              onClick={() => setIsTerrainModalOpen(false)}
+              className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="mt-2">
+              {(() => {
+                const btsCandidates = parsedData.sites.filter((s) => s.is_bts_candidate);
+                const activeBtsForProfile = selectedBtsIndex === -1 && selectedCpe?.serving_bts_index !== undefined
+                  ? btsCandidates[selectedCpe.serving_bts_index]
+                  : btsCandidates[selectedBtsIndex];
+
+                const btsLatForProfile = selectedCpe?.name === "Measured Path" && measurePoints.length > 0
+                  ? measurePoints[0][0]
+                  : activeBtsForProfile?.latitude;
+                const btsLonForProfile = selectedCpe?.name === "Measured Path" && measurePoints.length > 0
+                  ? measurePoints[0][1]
+                  : activeBtsForProfile?.longitude;
+
+                return (
+                  <TerrainChart
+                    profileData={terrainProfile?.profile || []}
+                    label={terrainProfile?.label || ""}
+                    isFlat={terrainProfile?.is_flat || false}
+                    cpeName={selectedCpe?.name || "CPE"}
+                    btsElevation={terrainProfile?.bts_elevation}
+                    cpeElevation={terrainProfile?.cpe_elevation}
+                    btsTotalHeight={terrainProfile?.bts_total_height}
+                    cpeTotalHeight={terrainProfile?.cpe_total_height}
+                    btsLat={btsLatForProfile}
+                    btsLon={btsLonForProfile}
+                    cpeLat={selectedCpe?.latitude}
+                    cpeLon={selectedCpe?.longitude}
+                    onHoverPoint={setHoverPoint}
+                  />
+                );
+              })()}
+            </div>
+          </div>
         </div>
       )}
     </Layout>

@@ -81,54 +81,107 @@ export default function RunSummaryBar({
   }, []);
 
   return (
-    <div className="bg-black/40 backdrop-blur-3xl rounded-xl border border-white/5 px-5 py-3">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="bg-white/[0.02] backdrop-blur-3xl rounded-2xl border border-white/10 p-4 space-y-3">
+      {/* Header Info */}
+      <div className="flex items-center justify-between border-b border-white/5 pb-2">
         <div className="flex items-center gap-2">
-          <span className={`relative flex h-2.5 w-2.5`}>
+          <span className="relative flex h-2 w-2">
             {isLoading && (
               <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75 animate-ping" />
             )}
-            <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isLoading ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" : "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"}`} />
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${isLoading ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" : "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"}`} />
           </span>
-          <span className="text-sm font-medium text-white/90">
+          <span className="text-xs font-semibold text-white/90">
             {isLoading ? "Running simulation…" : `Run #${runCount}`}
           </span>
           {!isLoading && lastRunAt && (
-            <span className="text-xs text-white/40">· {timeAgo(lastRunAt)}</span>
-          )}
-          {projectName && (
-            <span className="text-xs text-white/40 truncate max-w-[180px]">· {projectName}</span>
+            <span className="text-[10px] text-white/40">({timeAgo(lastRunAt)})</span>
           )}
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {btsName && <Chip icon={<Radio className="w-3.5 h-3.5" />} label="BTS" value={btsName} />}
-          {typeof frequencyMhz === "number" && (
-            <Chip icon={<Waves className="w-3.5 h-3.5" />} label="Freq" value={`${frequencyMhz.toFixed(0)} MHz`} />
-          )}
-          {model && (
-            <Chip
-              icon={model === "flat" ? <Activity className="w-3.5 h-3.5" /> : <Mountain className="w-3.5 h-3.5" />}
-              label="Model"
-              value={MODEL_LABEL[model] ?? model}
-            />
-          )}
-          {environment && (
-            <Chip
-              icon={<Trees className="w-3.5 h-3.5" />}
-              label="Env"
-              value={`${ENV_LABEL[environment] ?? environment}${environmentAuto ? " (auto)" : ""}`}
-            />
-          )}
-          {typeof eirpDbm === "number" && (
-            <Chip icon={<Gauge className="w-3.5 h-3.5" />} label="EIRP" value={`${eirpDbm.toFixed(1)} dBm`} />
-          )}
-          {typeof systemMarginDb === "number" && (
-            <Chip icon={<ShieldCheck className="w-3.5 h-3.5" />} label="Margin" value={`${systemMarginDb.toFixed(0)} dB`} />
-          )}
-          {typeof terrainLoaded === "boolean" && <DataChip label="Terrain" on={terrainLoaded} />}
-          {typeof landcoverLoaded === "boolean" && <DataChip label="Land cover" on={landcoverLoaded} />}
-        </div>
+        {projectName && (
+          <span className="text-[10px] text-white/40 truncate max-w-[150px] font-medium uppercase tracking-wider">
+            {projectName}
+          </span>
+        )}
       </div>
+
+      {/* 2-Column Parameter Grid */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+        {btsName && (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[9px] uppercase tracking-widest font-semibold text-white/30">Active Tower</span>
+            <span className="text-xs font-medium text-white/80 truncate">{btsName}</span>
+          </div>
+        )}
+        {typeof frequencyMhz === "number" && (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[9px] uppercase tracking-widest font-semibold text-white/30">Frequency</span>
+            <span className="text-xs font-medium text-white/80">{frequencyMhz.toFixed(0)} MHz</span>
+          </div>
+        )}
+        {model && (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[9px] uppercase tracking-widest font-semibold text-white/30">Propagation Model</span>
+            <span className="text-xs font-medium text-white/80">{MODEL_LABEL[model] ?? model}</span>
+          </div>
+        )}
+        {environment && (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[9px] uppercase tracking-widest font-semibold text-white/30">Clutter environment</span>
+            <span className="text-xs font-medium text-white/80 truncate">
+              {ENV_LABEL[environment] ?? environment}
+              {environmentAuto && <span className="text-[10px] text-slate-500 font-normal ml-1">(auto)</span>}
+            </span>
+          </div>
+        )}
+        {typeof eirpDbm === "number" && (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[9px] uppercase tracking-widest font-semibold text-white/30">BTS EIRP</span>
+            <span className="text-xs font-medium text-white/80">{eirpDbm.toFixed(1)} dBm</span>
+          </div>
+        )}
+        {typeof systemMarginDb === "number" && (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[9px] uppercase tracking-widest font-semibold text-white/30">Required Margin</span>
+            <span className="text-xs font-medium text-white/80">{systemMarginDb.toFixed(0)} dB</span>
+          </div>
+        )}
+      </div>
+
+      {/* Data Status Indicators */}
+      {(typeof terrainLoaded === "boolean" || typeof landcoverLoaded === "boolean") && (
+        <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-2">
+          <span className="text-[9px] uppercase tracking-widest font-semibold text-white/30">Data layers</span>
+          <div className="flex items-center gap-2">
+            {typeof terrainLoaded === "boolean" && (
+              <span
+                className={`inline-flex items-center gap-1.5 text-[9px] uppercase tracking-wider font-semibold rounded-full px-2 py-0.5 border ${
+                  terrainLoaded
+                    ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                    : "text-white/30 bg-white/5 border-white/10"
+                }`}
+                title={terrainLoaded ? "Real SRTM terrain data loaded" : "Flat terrain fallback"}
+              >
+                <span className={`h-1 w-1 rounded-full ${terrainLoaded ? "bg-emerald-400" : "bg-white/20"}`} />
+                SRTM
+              </span>
+            )}
+            {typeof landcoverLoaded === "boolean" && (
+              <span
+                className={`inline-flex items-center gap-1.5 text-[9px] uppercase tracking-wider font-semibold rounded-full px-2 py-0.5 border ${
+                  landcoverLoaded
+                    ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                    : "text-white/30 bg-white/5 border-white/10"
+                }`}
+                title={landcoverLoaded ? "ESA land cover data loaded" : "No land cover data"}
+              >
+                <span className={`h-1 w-1 rounded-full ${landcoverLoaded ? "bg-emerald-400" : "bg-white/20"}`} />
+                Landcover
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -38,6 +38,7 @@ interface MapViewProps {
   setMapTheme?: (theme: "dark" | "satellite" | "street") => void;
   measurePoints?: [number, number][];
   setMeasurePoints?: (points: [number, number][]) => void;
+  isSidebarExpanded?: boolean;
 }
 
 export default function MapView(props: MapViewProps) {

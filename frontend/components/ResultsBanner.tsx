@@ -69,39 +69,39 @@ export default function ResultsBanner({
 
   return (
     <div
-      className={`p-4 rounded-xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-300 ${
+      className={`p-4 rounded-2xl border flex flex-col gap-4 transition-all duration-300 ${
         isSuccess
-          ? "bg-emerald-950/30 border-emerald-500/20 text-emerald-300"
-          : "bg-amber-950/30 border-amber-500/20 text-amber-300"
+          ? "bg-emerald-500/[0.03] border-emerald-500/20 text-emerald-300"
+          : "bg-amber-500/[0.03] border-amber-500/20 text-amber-300"
       }`}
     >
       <div className="flex items-start gap-3">
-        <div className="mt-1">
+        <div className="mt-0.5 flex-shrink-0">
           {isSuccess ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           ) : (
-            <AlertTriangle className="w-5 h-5 text-amber-400" />
+            <AlertTriangle className="w-4 h-4 text-amber-400" />
           )}
         </div>
-        <div>
-          <h3 className="font-semibold text-white">Simulation Outcome Summary</h3>
-          <p className="text-sm opacity-90 mt-0.5">{plainEnglishResult}</p>
+        <div className="min-w-0">
+          <h3 className="text-xs font-bold text-white uppercase tracking-wider">Simulation Outcome</h3>
+          <p className="text-xs opacity-90 mt-1 leading-relaxed text-slate-300">{plainEnglishResult}</p>
         </div>
       </div>
 
       <button
         onClick={handleDownloadPdf}
         disabled={downloading || !activeSimulationParams}
-        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-800 disabled:text-slate-400 text-white rounded-lg font-medium text-sm transition shadow-lg shadow-blue-500/10 border border-blue-500/30 cursor-pointer"
+        className="w-full flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-semibold text-xs transition-all duration-300 shadow-[0_0_15px_rgba(79,70,229,0.3)] border border-white/10 cursor-pointer"
       >
         {downloading ? (
           <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Generating PDF...
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            Generating PDF Report...
           </>
         ) : (
           <>
-            <FileText className="w-4 h-4" />
+            <FileText className="w-3.5 h-3.5" />
             Download PDF Report
           </>
         )}
