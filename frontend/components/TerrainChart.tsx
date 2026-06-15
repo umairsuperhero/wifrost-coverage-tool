@@ -102,11 +102,11 @@ export default function TerrainChart({
 
   // Build SVG Paths
   // 1. Terrain filled path
-  let terrainPath = `M ${getX(profileData[0].distance_km)} ${getY(0)}`;
+  let terrainPath = `M ${getX(profileData[0].distance_km)} ${height}`;
   profileData.forEach((pt) => {
     terrainPath += ` L ${getX(pt.distance_km)} ${getY(pt.terrain_m)}`;
   });
-  terrainPath += ` L ${getX(profileData[profileData.length - 1].distance_km)} ${getY(0)} Z`;
+  terrainPath += ` L ${getX(profileData[profileData.length - 1].distance_km)} ${height} Z`;
 
   // 2. Fresnel Zone filled band path
   let fresnelPath = `M ${getX(profileData[0].distance_km)} ${getY(profileData[0].fresnel_upper_m)}`;
