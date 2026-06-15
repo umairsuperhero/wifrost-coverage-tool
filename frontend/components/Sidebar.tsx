@@ -435,7 +435,7 @@ export default function Sidebar({
         <>
           <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
             {/* File Upload Section */}
-      <div className="p-5 border-b border-white/5 space-y-4">
+      <div className="p-4 border-b border-white/5 space-y-3">
         <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
           <Upload className="w-4 h-4 text-blue-500" />
           1. Import Network Layout
@@ -445,7 +445,7 @@ export default function Sidebar({
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className="border-2 border-dashed border-white/20 bg-white/[0.02] hover:bg-white/[0.04] rounded-xl p-6 text-center cursor-pointer transition-all duration-300 group"
+          className="border-2 border-dashed border-white/20 bg-white/[0.02] hover:bg-white/[0.04] rounded-xl p-4 text-center cursor-pointer transition-all duration-300 group"
         >
           <input
             type="file"
@@ -483,7 +483,7 @@ export default function Sidebar({
       </div>
 
       {/* Simulation Parameters Section */}
-      <div className="p-5 flex-1 space-y-5">
+      <div className="p-4 flex-1 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
             <Sliders className="w-4 h-4 text-blue-500" />
@@ -625,7 +625,7 @@ export default function Sidebar({
           )}
 
           {/* Frequency & Heights */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40 flex items-center gap-1.5">
                 Frequency (MHz)
@@ -667,7 +667,7 @@ export default function Sidebar({
                 <span>BTS Equipment Config</span>
                 <Settings className="w-3.5 h-3.5 text-slate-400 group-open:rotate-90 transition duration-300" />
               </summary>
-              <div className="p-4 border-t border-white/5 space-y-4 bg-black/25">
+              <div className="p-3 border-t border-white/5 space-y-3 bg-black/25">
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-[9px] font-semibold uppercase tracking-wider text-white/40">Power (dBm)</label>
@@ -719,7 +719,7 @@ export default function Sidebar({
               <Compass className="w-3.5 h-3.5 text-blue-400" />
               <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Antenna Sectors</span>
             </div>
-            <div className="p-4 space-y-4">
+            <div className="p-3 space-y-3">
 
               {/* Sector count selector */}
               <div className="space-y-1.5">
@@ -796,7 +796,7 @@ export default function Sidebar({
                   <span>Antenna Pattern Details</span>
                   <span className="group-open:rotate-90 transition-transform duration-200 text-slate-400">▶</span>
                 </summary>
-                <div className="p-4 border-t border-white/5 space-y-2.5 bg-black/25">
+                <div className="p-3 border-t border-white/5 space-y-2.5 bg-black/25">
                   <p className="text-[9px] text-slate-500 italic">WiFrost panel defaults</p>
                   {[
                     { label: "H-plane HPBW (°)", val: hpbw, set: setHpbw },
@@ -827,7 +827,7 @@ export default function Sidebar({
                 <span>CPE client Config</span>
                 <Settings className="w-3.5 h-3.5 text-slate-400 group-open:rotate-90 transition duration-300" />
               </summary>
-              <div className="p-4 border-t border-white/5 space-y-4 bg-black/25">
+              <div className="p-3 border-t border-white/5 space-y-3 bg-black/25">
                 {/* Channel bandwidth → auto-computes Rx sensitivity */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Channel Bandwidth</label>
@@ -995,7 +995,7 @@ export default function Sidebar({
           </div>
 
           {/* Rerun simulation button */}
-          <div className="p-5 shrink-0 bg-transparent">
+          <div className="p-4 shrink-0 bg-transparent">
             <button
               id="simulate-btn"
               onClick={handleSimulateClick}

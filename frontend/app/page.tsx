@@ -646,7 +646,7 @@ export default function Home() {
 
 
       {/* Sidebar - controls & parameters */}
-      <div className="absolute top-24 bottom-6 left-6 w-96 z-20 pointer-events-auto">
+      <div className="absolute top-24 bottom-6 left-6 w-[320px] z-20 pointer-events-auto">
         <Sidebar
           onFileParsed={handleFileParsed}
           onSimulate={handleSimulate}
@@ -702,7 +702,7 @@ export default function Home() {
       {/* Right Dashboard Area (Overlays) */}
       <main className="absolute inset-0 pointer-events-none z-10 flex pt-24">
         {/* Spacer for sidebar */}
-        <div className="w-[24rem] shrink-0 ml-6" /> 
+        <div className="w-[320px] shrink-0 ml-6" /> 
         
         <div className="flex-1 flex flex-col h-full relative">
           {parsedData.sites.length > 0 && (
@@ -712,10 +712,10 @@ export default function Home() {
               {/* The Panel */}
               <div
                 className={`transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden h-full pointer-events-auto flex flex-col ${
-                  showResultsPanel ? "w-[420px] opacity-100 scale-100" : "w-0 opacity-0 scale-95 origin-right"
+                  showResultsPanel ? "w-[360px] opacity-100 scale-100" : "w-0 opacity-0 scale-95 origin-right"
                 }`}
               >
-                <aside className="w-[420px] glass-panel rounded-[2.5rem] flex flex-col h-full overflow-hidden shrink-0">
+                <aside className="w-[360px] glass-panel rounded-3xl flex flex-col h-full overflow-hidden shrink-0">
                   {/* Header */}
                   <div className="p-5 flex justify-between items-center border-b border-white/5 shrink-0 bg-transparent">
                     <h2 className="text-[13px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
