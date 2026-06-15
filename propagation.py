@@ -35,16 +35,17 @@ HB_EFF_MIN_M = 10.0
 HB_EFF_MAX_M = 200.0
 
 
-def earth_bulge_m(d1_km: float, d2_km: float) -> float:
-    """Earth-curvature bulge height (m) at a point d1 from one end, d2 from the other.
+# Effective BTS height limits for Hata (legacy fallback)
+HB_EFF_MIN_M = 10.0
+HB_EFF_MAX_M = 200.0
 
-    h = (d1 * d2) / (2 * a_e), with distances in km and a_e in km giving km, ×1000 → m.
-    Zero at both endpoints, maximal at mid-path. Added to terrain elevations so the
-    diffraction model sees the spherical earth and enforces a realistic radio horizon.
-    """
-    if d1_km <= 0.0 or d2_km <= 0.0:
-        return 0.0
-    return (d1_km * d2_km) / (2.0 * EFFECTIVE_EARTH_RADIUS_KM) * 1000.0
+try:
+    from itmlogic.preparatory_subroutines.qlrps import qlrps
+    from itmlogic.preparatory_subroutines.qlrpfl import qlrpfl
+    from itmlogic.statistics.avar import avar
+    HAS_ITMLOGIC = True
+except ImportError:
+    HAS_ITMLOGIC = False
 
 
 # ── Environment tables ────────────────────────────────────────────────────────
@@ -157,110 +158,47 @@ def water_path_loss(d_km: float, f_mhz: float, hb_m: float, hm_m: float = 3.0) -
     return float(max(two_ray, fspl))
 
 
-# ── Diffraction helpers ───────────────────────────────────────────────────────
+# ── ITM Longley-Rice ──────────────────────────────────────────────────────────
 
-def _knife_edge_loss(h_m: float, d1_m: float, d2_m: float, f_mhz: float) -> float:
-    """ITU-R single knife-edge diffraction loss (dB). h above LoS in m; d1, d2 in m."""
-    if d1_m <= 0 or d2_m <= 0 or f_mhz <= 0:
-        return 0.0
-    lambda_m = 300.0 / f_mhz
-    v = h_m * math.sqrt(2.0 * (d1_m + d2_m) / (lambda_m * d1_m * d2_m))
-    if v <= -0.7:
-        return 0.0
-    term = math.sqrt((v - 0.1) ** 2 + 1.0) + v - 0.1
-    if term <= 0:
-        return 0.0
-    return max(0.0, 6.9 + 20.0 * math.log10(term))
-
-
-_DEYGOUT_MAX_DEPTH = 3
-
-
-def deygout_loss(profile: List[Tuple[float, float]],
-                 h_tx_asl: float, h_rx_asl: float,
-                 f_mhz: float, depth: int = 0) -> float:
+def itm_longley_rice(profile_m: List[float], dz_m: float,
+                     f_mhz: float, hb_m: float, hm_m: float) -> Tuple[float, float]:
     """
-    Recursive Deygout multi-knife-edge diffraction loss (dB), capped at 30 dB.
-    profile: list of (distance_km_from_tx, elevation_m_asl)
-    h_tx_asl / h_rx_asl: antenna-tip heights above sea level (m)
+    Calculates ITM Longley-Rice path loss over irregular terrain.
+    Returns: (free_space_loss_db, attenuation_relative_to_free_space_db)
     """
-    if depth >= _DEYGOUT_MAX_DEPTH or len(profile) < 3:
-        return 0.0
+    if not HAS_ITMLOGIC:
+        # Graceful fallback to pure FSPL if library is missing
+        d_km = max(0.001, (len(profile_m) - 1) * dz_m / 1000.0)
+        fspl = 20.0 * math.log10(d_km) + 20.0 * math.log10(f_mhz) + 32.44
+        return fspl, 0.0
 
-    d_total = profile[-1][0]
-    if d_total <= 0:
-        return 0.0
-
-    # Find the dominant obstacle (highest Fresnel-Kirchhoff v)
-    best_v = -9999.0
-    best_idx = -1
-    for i in range(1, len(profile) - 1):
-        d1_km = profile[i][0]
-        d2_km = d_total - d1_km
-        if d1_km <= 0 or d2_km <= 0:
-            continue
-        los_h = h_tx_asl + (d1_km / d_total) * (h_rx_asl - h_tx_asl)
-        h_above = profile[i][1] - los_h
-        lambda_m = 300.0 / f_mhz
-        d1_m, d2_m = d1_km * 1000.0, d2_km * 1000.0
-        v = h_above * math.sqrt(2.0 * (d1_m + d2_m) / (lambda_m * d1_m * d2_m))
-        if v > best_v:
-            best_v = v
-            best_idx = i
-
-    if best_idx < 0 or best_v <= -0.7:
-        return 0.0
-
-    d1_km = profile[best_idx][0]
-    d2_km = d_total - d1_km
-    los_h = h_tx_asl + (d1_km / d_total) * (h_rx_asl - h_tx_asl)
-    h_above = profile[best_idx][1] - los_h
-    obs_elev = profile[best_idx][1]
-
-    obs_loss = _knife_edge_loss(h_above, d1_km * 1000.0, d2_km * 1000.0, f_mhz)
-
-    # Only recurse into the sub-paths when the dominant edge GENUINELY protrudes
-    # above the line of sight (best_v > 0). For a grazing or sub-LoS dominant edge
-    # (-0.7 < v <= 0) there is just a small single-edge Fresnel loss and no real
-    # secondary obstacle — recursing there would treat the smooth earth-curvature
-    # bulge as a chain of phantom knife edges and pile up tens of dB on a path that
-    # is, physically, near line-of-sight. Gating the recursion keeps short LoS links
-    # loss-free while still shadowing true over-the-horizon paths.
-    if best_v <= 0.0:
-        return min(obs_loss, DEYGOUT_MAX_LOSS_DB)
-
-    left_profile = profile[:best_idx + 1]
-    left_loss = deygout_loss(left_profile, h_tx_asl, obs_elev, f_mhz, depth + 1)
-
-    right_raw = profile[best_idx:]
-    offset = right_raw[0][0]
-    right_shifted = [(d - offset, e) for d, e in right_raw]
-    right_loss = deygout_loss(right_shifted, obs_elev, h_rx_asl, f_mhz, depth + 1)
-
-    return min(obs_loss + left_loss + right_loss, DEYGOUT_MAX_LOSS_DB)
-
-
-# ── Okumura-Hata (corrected) ──────────────────────────────────────────────────
-
-def okumura_hata(d_km: float, f_mhz: float, hb_m: float,
-                 hm_m: float = 2.0, environment: str = 'open') -> float:
-    """Path loss (dB) — Okumura-Hata. Open-area correction capped at 20 dB."""
-    d_km = max(0.01, d_km)
-    hb_m = max(1.0, hb_m)
-    hm_m = max(1.0, hm_m)
-
-    a_hm = (1.1 * math.log10(f_mhz) - 0.7) * hm_m - (1.56 * math.log10(f_mhz) - 0.8)
-    loss = (69.55 + 26.16 * math.log10(f_mhz) - 13.82 * math.log10(hb_m) - a_hm
-            + (44.9 - 6.55 * math.log10(hb_m)) * math.log10(d_km))
-
-    if environment in ('open', 'open_water'):
-        raw_corr = 4.78 * (math.log10(f_mhz)) ** 2 - 18.33 * math.log10(f_mhz) + 40.94
-        loss -= min(raw_corr, OPEN_AREA_CORRECTION_CAP_DB)
-    elif environment in ('suburban', 'vegetation_light', 'vegetation_dense', 'port_industrial'):
-        loss -= 2.0 * (math.log10(f_mhz / 28.0)) ** 2 + 5.4
-
-    fspl = 20.0 * math.log10(d_km) + 20.0 * math.log10(f_mhz) + 32.44
-    return float(max(loss, fspl))
+    N = len(profile_m) - 1
+    elev_profile = [float(N), float(dz_m)] + [float(e) for e in profile_m]
+    
+    # 5 = Continental Temperate climate. 
+    # 301.0 = Average surface refractivity
+    # 15.0 = Average ground dielectric, 0.005 = Average ground conductivity
+    prop = {
+        'kwx': 0, 'mdp': -1, 'lvar': 0,
+        'pfl': elev_profile,
+        'hg': [float(hb_m), float(hm_m)],
+        'mdvarx': 5,
+        'klimx': 5
+    }
+    
+    # 1 = Vertical polarization
+    wn, gme, ens, zgnd = qlrps(float(f_mhz), 0.0, 301.0, 1, 15.0, 0.005)
+    prop.update({'wn': wn, 'gme': gme, 'ens': ens, 'zgnd': zgnd})
+    
+    prop = qlrpfl(prop)
+    # 0.0 means 50% reliability and confidence (median loss)
+    fs, prop = avar(0.0, 0.0, 0.0, prop)
+    
+    dist_km = prop['dist'] / 1000.0
+    fspl = 32.4 + 20 * math.log10(max(f_mhz, 1.0)) + 20 * math.log10(max(dist_km, 0.001))
+    
+    diffraction = prop['aref'] + fs
+    return fspl, diffraction
 
 
 # ── Path loss result ──────────────────────────────────────────────────────────
@@ -342,25 +280,32 @@ def terrain_aware_loss(bts_lat: float, bts_lon: float, bts_height_m: float,
     else:
         clutter_db = float(ENVIRONMENT_CLUTTER_LOSS.get(environment, 3))
 
-    if environment == 'open_water':
-        base_loss = water_path_loss(max(d_total, 0.01), f_mhz, hb_eff, hm_eff)
-    else:
-        base_loss = okumura_hata(max(d_total, 0.01), f_mhz, hb_eff, hm_eff, environment)
-
     if d_total <= 0.05:
-        return PathLossResult(base_loss, 0.0, clutter_db, hb_eff, environment)
+        fspl = 20.0 * math.log10(max(d_total, 0.001)) + 20.0 * math.log10(f_mhz) + 32.44
+        return PathLossResult(fspl, 0.0, clutter_db, bts_height_m, environment)
 
-    # Add the earth-curvature bulge to each terrain point so the diffraction model
-    # sees the spherical earth — this enforces a realistic radio horizon instead of
-    # treating long over-the-horizon paths as clear line-of-sight. We apply this
-    # even without SRTM data (flat grid): a 30 m tower simply cannot see a 10 m CPE
-    # beyond the geometric horizon regardless of whether we loaded terrain tiles,
-    # so the heatmap and the CPE link budget stay on one physics.
-    profile = get_profile(terrain_grid, bts_lat, bts_lon, rx_lat, rx_lon, n_points=100)
-    profile = [(d, e + earth_bulge_m(d, d_total - d)) for d, e in profile]
-    diffraction = deygout_loss(profile, bts_asl, rx_asl, f_mhz)
+    if environment == 'open_water':
+        # Pure over-water link uses two-ray ground reflection model
+        base_loss = water_path_loss(max(d_total, 0.01), f_mhz, bts_height_m, rx_height_m)
+        diffraction = 0.0
+    elif terrain_grid.is_flat:
+        # Fall back to FSPL if no terrain data is loaded (clutter is still applied)
+        base_loss = 20.0 * math.log10(max(d_total, 0.001)) + 20.0 * math.log10(f_mhz) + 32.44
+        diffraction = 0.0
+    else:
+        # Full ITM Longley-Rice deterministic terrain physics
+        raw_profile = get_profile(terrain_grid, bts_lat, bts_lon, rx_lat, rx_lon, n_points=100)
+        elevations = [e for d, e in raw_profile]
+        dz_m = (d_total * 1000.0) / (len(elevations) - 1)
+        
+        try:
+            base_loss, diffraction = itm_longley_rice(elevations, dz_m, f_mhz, bts_height_m, rx_height_m)
+        except Exception:
+            # Fallback to FSPL if ITM matrix math fails on an edge case
+            base_loss = 20.0 * math.log10(max(d_total, 0.001)) + 20.0 * math.log10(f_mhz) + 32.44
+            diffraction = 0.0
 
-    return PathLossResult(base_loss, diffraction, clutter_db, hb_eff, environment)
+    return PathLossResult(base_loss, diffraction, clutter_db, bts_height_m, environment)
 
 
 # ── Link budget helpers ───────────────────────────────────────────────────────
