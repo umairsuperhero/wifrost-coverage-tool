@@ -707,7 +707,7 @@ export default function Home() {
         <div className="flex-1 flex flex-col h-full relative">
           {parsedData.sites.length > 0 && (
             /* Results HUD (Right-Aligned Glass Panel) */
-            <div className="absolute top-24 bottom-6 right-6 z-20 flex items-start gap-4 pointer-events-none h-[calc(100vh-8rem)]">
+            <div className="absolute top-24 bottom-6 right-6 z-20 flex items-start gap-4 pointer-events-none">
               
               {/* The Panel */}
               <div
@@ -745,26 +745,20 @@ export default function Home() {
                           Overview
                         </button>
                         <button
-                          onClick={() => cpeResults.length > 0 && setResultsTab("clients")}
-                          disabled={cpeResults.length === 0}
+                          onClick={() => setResultsTab("clients")}
                           className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 cursor-pointer ${
                             resultsTab === "clients"
                               ? "bg-white/10 text-white shadow-sm"
-                              : cpeResults.length === 0
-                              ? "text-white/15 cursor-not-allowed"
                               : "text-white/40 hover:text-white/70"
                           }`}
                         >
                           Clients
                         </button>
                         <button
-                          onClick={() => selectedCpe && setResultsTab("link")}
-                          disabled={!selectedCpe}
+                          onClick={() => setResultsTab("link")}
                           className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 cursor-pointer ${
                             resultsTab === "link"
                               ? "bg-white/10 text-white shadow-sm"
-                              : !selectedCpe
-                              ? "text-white/15 cursor-not-allowed"
                               : "text-white/40 hover:text-white/70"
                           }`}
                         >
@@ -775,7 +769,7 @@ export default function Home() {
                   )}
 
                   {/* Body */}
-                  <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 space-y-5 custom-scrollbar">
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 pb-10 space-y-5 custom-scrollbar">
                     {isLoading && slowStart && (
                       <div className="flex flex-col items-center gap-2 text-center bg-transparent rounded-2xl p-4 border border-white/10">
                         <p className="text-sm text-amber-400 font-medium drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]">⏳ Still working…</p>
@@ -853,6 +847,13 @@ export default function Home() {
                               )}
                             </div>
 
+                            {cpeResults.length === 0 && (
+                              <div className="p-6 border border-white/5 bg-white/5 rounded-xl text-center text-white/50">
+                                <p className="text-sm font-semibold">No clients loaded.</p>
+                                <p className="text-xs mt-1 text-white/40">Import client sites via CSV/KMZ or use the Add CPE button above to drop points on the map.</p>
+                              </div>
+                            )}
+
                             {/* CPE Summary Bar — only when CPE results exist */}
                             {cpeResults.length > 0 && (
                               <CpeSummaryBar cpeResults={cpeResults} />
@@ -873,6 +874,13 @@ export default function Home() {
                         {/* Tab 3: Path Link */}
                         {resultsTab === "link" && (
                           <div className="space-y-5">
+                            {!selectedCpe && (
+                              <div className="p-6 border border-white/5 bg-white/5 rounded-xl text-center text-white/50">
+                                <p className="text-sm font-semibold">No active link.</p>
+                                <p className="text-xs mt-1 text-white/40">Select a client on the map or in the Clients tab to view its detailed Path Link and Terrain Profile.</p>
+                              </div>
+                            )}
+
                             {selectedCpe && (
                               <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-4 flex items-center justify-between text-xs">
                                 <span className="font-semibold text-white">Active Link: {selectedCpe.name}</span>
