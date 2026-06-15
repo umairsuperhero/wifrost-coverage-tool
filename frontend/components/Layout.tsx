@@ -23,6 +23,18 @@ export default function Layout({ children }: LayoutProps) {
 
         {/* Action Center & Profile */}
         <div className="flex items-center space-x-4">
+          <button 
+            onClick={() => {
+              if (typeof document !== 'undefined') {
+                const current = document.documentElement.getAttribute('data-theme');
+                document.documentElement.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+              }
+            }}
+            className="text-[10px] uppercase tracking-wider text-white/60 hover:text-white transition-colors font-semibold bg-white/5 px-2 py-1 rounded border border-white/10"
+          >
+            Theme
+          </button>
+          
           <WhatsNewButton />
           
           <div className="h-6 w-[1px] bg-white/10" />

@@ -376,7 +376,7 @@ export default function MapInner({
 
       {/* Map Legend Floating Ornament */}
       <div className={`glass-panel absolute bottom-8 z-[10] p-4 rounded-2xl text-xs text-foreground space-y-3 min-w-[220px] transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-        isSidebarExpanded ? "left-[380px]" : "left-[96px]"
+        isSidebarExpanded ? "left-[430px]" : "left-[120px]"
       }`}>
         <h4 className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground">Signal Legend</h4>
         <div className="space-y-2 font-mono">

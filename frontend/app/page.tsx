@@ -643,22 +643,7 @@ export default function Home() {
   return (
     <Layout>
 
-      {/* Top Navbar Ornament */}
-      <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 pointer-events-auto">
-        <div className={cn("glass-panel rounded-full px-6 py-3 flex items-center gap-6", "shadow-[0_8px_32px_rgba(0,0,0,0.4)]")}>
-          <div className="flex items-center gap-2">
-            <Signal className="w-5 h-5 text-primary" />
-            <span className="font-bold text-white tracking-wide">WiFrost</span>
-          </div>
-          <div className="w-[1px] h-4 bg-white/20" />
-          <button 
-            onClick={() => document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark')}
-            className="text-white/70 hover:text-white transition-colors text-sm font-semibold"
-          >
-            Toggle Theme
-          </button>
-        </div>
-      </div>
+
 
       {/* Sidebar - controls & parameters */}
       <div className="absolute top-24 bottom-6 left-6 w-96 z-20 pointer-events-auto">
@@ -720,18 +705,7 @@ export default function Home() {
         <div className="w-[24rem] shrink-0 ml-6" /> 
         
         <div className="flex-1 flex flex-col h-full relative">
-          {parsedData.sites.length === 0 ? (
-            /* Empty State */
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center text-white/40 pointer-events-auto z-50">
-              <div className="p-10 bg-black/40 backdrop-blur-3xl border border-white/10 rounded-3xl flex flex-col items-center justify-center mb-4 shadow-2xl">
-                <Compass className="w-16 h-16 text-blue-500 animate-spin-slow drop-shadow-[0_0_12px_rgba(59,130,246,0.6)] mb-6" />
-                <h2 className="text-2xl font-bold text-white mb-2">No Project Loaded</h2>
-                <p className="text-sm text-white/60 max-w-sm">
-                  Please upload a KMZ, KML, or Excel file on the sidebar to parse candidate tower locations and customer sites.
-                </p>
-              </div>
-            </div>
-          ) : (
+          {parsedData.sites.length > 0 && (
             /* Results HUD (Right-Aligned Glass Panel) */
             <div className="absolute top-24 bottom-6 right-6 z-20 flex items-start gap-4 pointer-events-none h-[calc(100vh-8rem)]">
               
