@@ -707,7 +707,7 @@ export default function Home() {
         <div className="flex-1 flex flex-col h-full relative">
           {parsedData.sites.length > 0 && (
             /* Results HUD (Right-Aligned Glass Panel) */
-            <div className="absolute top-24 bottom-6 right-6 z-20 flex items-start gap-4 pointer-events-none">
+            <div className="absolute top-24 bottom-6 right-6 z-20 flex items-stretch gap-4 pointer-events-none">
               
               {/* The Panel */}
               <div
@@ -739,7 +739,7 @@ export default function Home() {
                           className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 cursor-pointer ${
                             resultsTab === "overview"
                               ? "bg-white/10 text-white shadow-sm"
-                              : "text-white/40 hover:text-white/70"
+                              : "text-slate-400 hover:text-white"
                           }`}
                         >
                           Overview
@@ -749,7 +749,7 @@ export default function Home() {
                           className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 cursor-pointer ${
                             resultsTab === "clients"
                               ? "bg-white/10 text-white shadow-sm"
-                              : "text-white/40 hover:text-white/70"
+                              : "text-slate-400 hover:text-white"
                           }`}
                         >
                           Clients
@@ -759,7 +759,7 @@ export default function Home() {
                           className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 cursor-pointer ${
                             resultsTab === "link"
                               ? "bg-white/10 text-white shadow-sm"
-                              : "text-white/40 hover:text-white/70"
+                              : "text-slate-400 hover:text-white"
                           }`}
                         >
                           Path Link

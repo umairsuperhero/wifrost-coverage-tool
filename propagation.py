@@ -56,7 +56,7 @@ ENVIRONMENT_CLUTTER_LOSS: dict = {
     "suburban":          8,
     "vegetation_light":  6,
     "vegetation_dense": 15,
-    "urban":            18,
+    "urban":             8,
 }
 
 ENVIRONMENT_SIGMA: dict = {
