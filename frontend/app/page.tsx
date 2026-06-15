@@ -646,7 +646,7 @@ export default function Home() {
 
 
       {/* Sidebar - controls & parameters */}
-      <div className="absolute top-24 bottom-6 left-6 w-[320px] z-20 pointer-events-auto">
+      <div className="absolute top-24 bottom-6 left-6 z-20 pointer-events-none">
         <Sidebar
           onFileParsed={handleFileParsed}
           onSimulate={handleSimulate}
