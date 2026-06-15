@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Activity, Radio, Waves, Mountain, Trees, Gauge, ShieldCheck } from "lucide-react";
+import { cn } from "../lib/utils";
 
 interface RunSummaryBarProps {
   runCount: number;
@@ -81,7 +82,7 @@ export default function RunSummaryBar({
   }, []);
 
   return (
-    <div className="bg-white/[0.02] backdrop-blur-3xl rounded-2xl border border-white/10 p-4 space-y-3">
+    <div className="glass-panel rounded-2xl p-4 space-y-3">
       {/* Header Info */}
       <div className="flex items-center justify-between border-b border-white/5 pb-2">
         <div className="flex items-center gap-2">

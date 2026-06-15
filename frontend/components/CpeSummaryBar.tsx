@@ -1,4 +1,5 @@
 import { CpeResult, cpeTier } from "./CpeTable";
+import { cn } from "../lib/utils";
 
 interface CpeSummaryBarProps {
   cpeResults: CpeResult[];
@@ -15,7 +16,7 @@ export default function CpeSummaryBar({ cpeResults }: CpeSummaryBarProps) {
   const pct       = total > 0 ? Math.round((reliable / total) * 100) : 0;
 
   return (
-    <div className="bg-black/40 backdrop-blur-3xl rounded-xl border border-white/5 px-5 py-3">
+    <div className="glass-panel rounded-xl px-4 py-2">
       <div className="flex items-center gap-4 flex-wrap">
         <span className="text-sm font-medium text-white/90">CPE Coverage</span>
         <div className="flex items-center gap-3 flex-wrap">

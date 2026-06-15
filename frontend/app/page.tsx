@@ -16,6 +16,7 @@ import CpeSummaryBar from "../components/CpeSummaryBar";
 import RunSummaryBar from "../components/RunSummaryBar";
 import { Compass, HelpCircle, AlertCircle, Signal, CheckCircle, AlertTriangle, X } from "lucide-react";
 import axios from "axios";
+import { cn } from "../lib/utils";
 
 // One automatic retry on network/5xx errors — handles Cloud Run cold-start 503 (scales to zero)
 async function axiosWithRetry(fn: () => Promise<any>, delayMs = 4000): Promise<any> {
@@ -641,6 +642,24 @@ export default function Home() {
 
   return (
     <Layout>
+
+      {/* Top Navbar Ornament */}
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 pointer-events-auto">
+        <div className={cn("glass-panel rounded-full px-6 py-3 flex items-center gap-6", "shadow-[0_8px_32px_rgba(0,0,0,0.4)]")}>
+          <div className="flex items-center gap-2">
+            <Signal className="w-5 h-5 text-primary" />
+            <span className="font-bold text-white tracking-wide">WiFrost</span>
+          </div>
+          <div className="w-[1px] h-4 bg-white/20" />
+          <button 
+            onClick={() => document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark')}
+            className="text-white/70 hover:text-white transition-colors text-sm font-semibold"
+          >
+            Toggle Theme
+          </button>
+        </div>
+      </div>
+
       {/* Sidebar - controls & parameters */}
       <div className="absolute top-24 bottom-6 left-6 w-96 z-20 pointer-events-auto">
         <Sidebar
@@ -722,9 +741,9 @@ export default function Home() {
                   showResultsPanel ? "w-[420px] opacity-100 scale-100" : "w-0 opacity-0 scale-95 origin-right"
                 }`}
               >
-                <aside className="w-[420px] bg-slate-950/85 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] shadow-[0_0_40px_rgba(0,0,0,0.5)] flex flex-col h-full overflow-hidden shrink-0">
+                <aside className="w-[420px] glass-panel rounded-[2.5rem] flex flex-col h-full overflow-hidden shrink-0">
                   {/* Header */}
-                  <div className="p-5 flex justify-between items-center border-b border-white/5 shrink-0 bg-slate-900/50">
+                  <div className="p-5 flex justify-between items-center border-b border-white/5 shrink-0 bg-transparent">
                     <h2 className="text-[13px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
                       <Signal className="w-4 h-4 text-emerald-400" />
                       Simulation Results
@@ -739,8 +758,8 @@ export default function Home() {
 
                   {/* Tabs bar */}
                   {simulationResults && (
-                    <div className="px-5 pt-4 shrink-0 bg-slate-950/20">
-                      <div className="flex bg-black/40 border border-white/5 rounded-xl p-0.5 gap-0.5">
+                    <div className="px-5 pt-4 shrink-0 bg-transparent">
+                      <div className="flex glass-panel rounded-xl p-0.5 gap-0.5">
                         <button
                           onClick={() => setResultsTab("overview")}
                           className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 cursor-pointer ${
@@ -784,7 +803,7 @@ export default function Home() {
                   {/* Body */}
                   <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 space-y-5 custom-scrollbar">
                     {isLoading && slowStart && (
-                      <div className="flex flex-col items-center gap-2 text-center bg-slate-900/50 rounded-2xl p-4 border border-white/10">
+                      <div className="flex flex-col items-center gap-2 text-center bg-transparent rounded-2xl p-4 border border-white/10">
                         <p className="text-sm text-amber-400 font-medium drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]">⏳ Still working…</p>
                         <p className="text-xs text-slate-300">
                           Large areas or many sites take longer to compute.
@@ -952,7 +971,7 @@ export default function Home() {
 
           {/* Right Ornament (Toggle Button) */}
           {simulationResults && (
-            <div className="flex flex-col items-center gap-4 bg-slate-950/85 backdrop-blur-2xl border border-white/10 rounded-full p-2 py-4 pointer-events-auto shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-300">
+            <div className="flex flex-col items-center gap-4 glass-panel rounded-full p-2 py-4 pointer-events-auto shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-300">
               <button
                 onClick={() => setShowResultsPanel(!showResultsPanel)}
                 title="Toggle Results Panel"

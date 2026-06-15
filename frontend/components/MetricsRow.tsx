@@ -1,5 +1,6 @@
 import React from "react";
 import { Signal, CheckCircle2, ShieldCheck } from "lucide-react";
+import { cn } from "../lib/utils";
 
 interface ScenarioStats {
   coverage_pct: number;
@@ -48,7 +49,7 @@ export default function MetricsRow({ threeScenarios, activeScenarioName, onScena
   return (
     <div className="space-y-3">
       {/* Scenario Segmented Toggler */}
-      <div className="flex bg-black/40 border border-white/5 rounded-xl p-0.5 gap-0.5">
+      <div className="flex glass-panel rounded-xl p-0.5 gap-0.5">
         {(["best", "realistic", "conservative"] as const).map((key) => {
           const isActive = key === activeScenarioName;
           return (
@@ -69,7 +70,7 @@ export default function MetricsRow({ threeScenarios, activeScenarioName, onScena
       </div>
 
       {/* Active Scenario Card */}
-      <div className="bg-white/[0.02] backdrop-blur-3xl rounded-2xl border border-white/10 p-5 space-y-4">
+      <div className="glass-panel rounded-2xl p-4 space-y-3">
         <div className="flex justify-between items-start">
           <div>
             <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
@@ -82,7 +83,7 @@ export default function MetricsRow({ threeScenarios, activeScenarioName, onScena
             </h4>
             <p className="text-xs text-slate-400 mt-0.5">{activeMeta.sub}</p>
           </div>
-          <span className="text-3xl font-extrabold text-white tracking-tight tabular-nums">
+          <span className="text-3xl font-extrabold text-white tracking-tight font-mono">
             {activeScenario.coverage_pct}%
           </span>
         </div>
@@ -108,7 +109,7 @@ export default function MetricsRow({ threeScenarios, activeScenarioName, onScena
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               <span>Reliable Area Coverage</span>
             </div>
-            <span className="font-semibold text-white tabular-nums">{activeScenario.coverage_pct}%</span>
+            <span className="font-semibold text-white font-mono">{activeScenario.coverage_pct}%</span>
           </div>
 
           <div className="flex items-center justify-between text-xs">
@@ -116,7 +117,7 @@ export default function MetricsRow({ threeScenarios, activeScenarioName, onScena
               <Signal className="w-4 h-4 text-blue-400" />
               <span>Strong Signal Coverage</span>
             </div>
-            <span className="font-semibold text-white tabular-nums">{activeScenario.good_pct}%</span>
+            <span className="font-semibold text-white font-mono">{activeScenario.good_pct}%</span>
           </div>
 
           <div className="flex items-center justify-between text-xs">
@@ -124,7 +125,7 @@ export default function MetricsRow({ threeScenarios, activeScenarioName, onScena
               <ShieldCheck className="w-4 h-4 text-indigo-400" />
               <span>Safety Link Margin</span>
             </div>
-            <span className="font-semibold text-white tabular-nums">
+            <span className="font-semibold text-white font-mono">
               {typeof activeScenario.margin_db === "number" ? `${activeScenario.margin_db.toFixed(0)} dB` : "—"}
             </span>
           </div>

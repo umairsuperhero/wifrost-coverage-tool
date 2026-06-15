@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { Table, Download, Search, Check, AlertTriangle, X } from "lucide-react";
+import { cn } from "../lib/utils";
 
 const SECTOR_COLORS = ["#3B82F6", "#22C55E", "#F59E0B"];
 const SECTOR_LABELS = ["S1", "S2", "S3"];
@@ -97,7 +98,7 @@ export default function CpeTable({ cpeResults, selectedCpeName, onSelectCpe, sec
   };
 
   return (
-    <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-4 space-y-4">
+    <div className="glass-panel rounded-2xl p-4 space-y-4">
       {/* Header controls */}
       <div className="flex flex-col gap-3 pb-3 border-b border-white/5">
         <div className="flex items-center justify-between">

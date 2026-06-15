@@ -5,6 +5,7 @@ import { Upload, Sliders, Play, Settings, AlertCircle, FileSpreadsheet, Compass,
 import axios from "axios";
 import CompassRose from "./CompassRose";
 import HistoryPanel from "./HistoryPanel";
+import { cn } from "../lib/utils";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
@@ -339,7 +340,7 @@ export default function Sidebar({
   return (
     <div className="flex items-start gap-4 h-full pointer-events-none">
       {/* VisionOS Ornament (Left Floating Toolbar) */}
-      <div className="flex flex-col items-center gap-4 bg-slate-950/85 backdrop-blur-2xl border border-white/10 rounded-full p-2 py-4 pointer-events-auto shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-300">
+      <div className="flex flex-col items-center gap-4 glass-panel rounded-full p-2 py-4 pointer-events-auto shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-300">
         <button
           onClick={() => onToggleExpanded(!isExpanded)}
           title="Toggle Parameters Panel"
@@ -391,10 +392,10 @@ export default function Sidebar({
           isExpanded ? "w-[320px] opacity-100 scale-100" : "w-0 opacity-0 scale-95 origin-left"
         }`}
       >
-        <aside className="w-[320px] bg-slate-950/85 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] shadow-[0_0_40px_rgba(0,0,0,0.5)] flex flex-col h-full overflow-hidden">
+        <aside className="w-[320px] glass-panel rounded-[2.5rem] flex flex-col h-full overflow-hidden">
       {/* Sidebar Tabs (Segmented Control) */}
       <div className="p-4 px-5 flex justify-center border-b border-white/5 shrink-0">
-        <div className="flex bg-black/50 backdrop-blur-md rounded-full p-1 border border-white/10 w-full max-w-full">
+        <div className="flex glass-panel rounded-full p-1 w-full max-w-full">
           <button
             onClick={() => setActiveTab("params")}
             className={`flex-1 py-2 text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 rounded-full transition-all duration-300 ${
@@ -510,7 +511,7 @@ export default function Sidebar({
               value={selectedBtsIndex}
               onChange={(e) => setSelectedBtsIndex(Number(e.target.value))}
               disabled={btsCandidates.length === 0}
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 transition-all duration-200"
+              className="w-full px-3 py-2 glass-panel bg-transparent rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 transition-all duration-200"
             >
               {btsCandidates.length === 0 ? (
                 <option value={0}>No BTS candidates found</option>
@@ -537,7 +538,7 @@ export default function Sidebar({
               <select
                 value={rfPreset}
                 onChange={(e) => applyRfPreset(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-all duration-200"
+                className="w-full glass-panel bg-transparent rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-all duration-200"
               >
                 <option value="manual">✓ Manual (Custom)</option>
                 <option value="macro_site">Macro Site (High Tower, Long Range)</option>
@@ -554,7 +555,7 @@ export default function Sidebar({
                 Propagation Model
                 <Tooltip content="Terrain-Aware: Okumura-Hata propagation calculated over real elevation data from SRTM. Flat Hata: Standard Hata formula assuming a flat plain." />
               </label>
-              <div className="flex bg-black/40 border border-white/5 rounded-xl p-0.5 gap-0.5">
+              <div className="flex glass-panel rounded-xl p-0.5 gap-0.5">
                 <button
                   type="button"
                   onClick={() => setModelType("terrain_aware")}
@@ -593,7 +594,7 @@ export default function Sidebar({
                 setEnvironment(e.target.value);
                 setRfPreset("manual");
               }}
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 transition-all duration-200"
+              className="w-full px-3 py-2 glass-panel bg-transparent rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 transition-all duration-200"
             >
               <option value="auto">Auto (from land cover) — recommended</option>
               <option value="open">Open / Rural Flat</option>
@@ -639,7 +640,7 @@ export default function Sidebar({
                 }}
                 min={470}
                 max={670}
-                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 transition-all duration-200"
+                className="w-full px-3 py-2 glass-panel bg-transparent rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 transition-all duration-200"
               />
             </div>
             <div className="space-y-1.5">
@@ -654,7 +655,7 @@ export default function Sidebar({
                   setBtsHeight(Number(e.target.value));
                   setRfPreset("manual");
                 }}
-                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 transition-all duration-200"
+                className="w-full px-3 py-2 glass-panel bg-transparent rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 transition-all duration-200"
               />
             </div>
           </div>
@@ -677,7 +678,7 @@ export default function Sidebar({
                         setTxPowerDbm(Number(e.target.value));
                         setRfPreset("manual");
                       }}
-                      className="w-full px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
+                      className="w-full px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -689,7 +690,7 @@ export default function Sidebar({
                         setAntennaGainDbi(Number(e.target.value));
                         setRfPreset("manual");
                       }}
-                      className="w-full px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
+                      className="w-full px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -701,7 +702,7 @@ export default function Sidebar({
                         setCableLossDb(Number(e.target.value));
                         setRfPreset("manual");
                       }}
-                      className="w-full px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
+                      className="w-full px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                     />
                   </div>
                 </div>
@@ -723,7 +724,7 @@ export default function Sidebar({
               {/* Sector count selector */}
               <div className="space-y-1.5">
                 <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Number of sectors</label>
-                <div className="flex bg-black/40 border border-white/5 rounded-xl p-0.5 gap-0.5">
+                <div className="flex glass-panel rounded-xl p-0.5 gap-0.5">
                   {([1, 2, 3] as const).map((n) => (
                     <button
                       key={n}
@@ -768,7 +769,7 @@ export default function Sidebar({
                       max={359}
                       value={az}
                       onChange={(e) => handleAzimuthChange(i, Number(e.target.value))}
-                      className="w-20 px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white text-right focus:outline-none focus:border-blue-500/50 transition-all duration-200"
+                      className="w-20 px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white text-right focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                     />
                     <span className="text-xs text-slate-400">°</span>
                   </div>
@@ -782,7 +783,7 @@ export default function Sidebar({
                   <button
                     type="button"
                     onClick={autoSpaceFrom0}
-                    className="w-full py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400 bg-white/5 border border-white/10 rounded-xl hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                    className="w-full py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400 glass-panel bg-transparent rounded-xl hover:text-white hover:bg-white/10 transition-all cursor-pointer"
                   >
                     ↺ Equal spacing from Sector 1
                   </button>
@@ -809,7 +810,7 @@ export default function Sidebar({
                         type="number"
                         value={val}
                         onChange={(e) => set(Number(e.target.value))}
-                        className="w-20 px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white text-right focus:outline-none focus:border-blue-500/50 transition-all duration-200"
+                        className="w-20 px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white text-right focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                       />
                     </div>
                   ))}
@@ -830,7 +831,7 @@ export default function Sidebar({
                 {/* Channel bandwidth → auto-computes Rx sensitivity */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Channel Bandwidth</label>
-                  <div className="flex bg-black/40 border border-white/5 rounded-xl p-0.5 gap-0.5">
+                  <div className="flex glass-panel rounded-xl p-0.5 gap-0.5">
                     {[6, 12, 18, 24].map((bw) => (
                       <button
                         key={bw}
@@ -864,7 +865,7 @@ export default function Sidebar({
                         setCpeHeight(Number(e.target.value));
                         setRfPreset("manual");
                       }}
-                      className="w-full px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
+                      className="w-full px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -876,7 +877,7 @@ export default function Sidebar({
                         setNoiseFigureDb(Number(e.target.value));
                         setRfPreset("manual");
                       }}
-                      className="w-full px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
+                      className="w-full px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -888,11 +889,11 @@ export default function Sidebar({
                         setRequiredSnrDb(Number(e.target.value));
                         setRfPreset("manual");
                       }}
-                      className="w-full px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
+                      className="w-full px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                     />
                   </div>
                 </div>
-                <div className="flex items-center justify-between px-3 py-2 bg-white/5 border border-white/10 rounded-xl">
+                <div className="flex items-center justify-between px-3 py-2 glass-panel bg-transparent rounded-xl">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">Rx Sensitivity</span>
                   <span className="text-xs font-bold text-white">{cpeSensitivity} dBm</span>
                 </div>
@@ -906,7 +907,7 @@ export default function Sidebar({
                         setCpeGainDbi(Number(e.target.value));
                         setRfPreset("manual");
                       }}
-                      className="w-full px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
+                      className="w-full px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -918,7 +919,7 @@ export default function Sidebar({
                         setCpeCableLossDb(Number(e.target.value));
                         setRfPreset("manual");
                       }}
-                      className="w-full px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
+                      className="w-full px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                     />
                   </div>
                 </div>
@@ -940,7 +941,7 @@ export default function Sidebar({
                 setRfPreset("manual");
               }}
               min={0}
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 transition-all duration-200"
+              className="w-full px-3 py-2 glass-panel bg-transparent rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 transition-all duration-200"
             />
           </div>
 
@@ -961,7 +962,7 @@ export default function Sidebar({
               <select
                 value={coverageProbability}
                 onChange={(e) => setCoverageProbability(e.target.value)}
-                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 transition-all duration-200"
+                className="w-full px-3 py-2 glass-panel bg-transparent rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 transition-all duration-200"
               >
                 <option value="50%">50% (Median)</option>
                 <option value="75%">75%</option>
@@ -984,7 +985,7 @@ export default function Sidebar({
                 placeholder="Uses server defaults if blank"
                 value={srtmKey}
                 onChange={(e) => setSrtmKey(e.target.value)}
-                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all duration-200"
+                className="w-full px-3 py-2 glass-panel bg-transparent rounded-xl text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all duration-200"
               />
             </div>
           )}

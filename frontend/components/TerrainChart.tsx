@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { AlertCircle, Activity, Maximize2 } from "lucide-react";
+import { cn } from "../lib/utils";
 
 interface ProfilePoint {
   distance_km: number;
@@ -47,7 +48,7 @@ export default function TerrainChart({
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   if (isFlat) {
     return (
-      <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col items-center justify-center h-[280px] text-slate-400">
+      <div className="glass-panel rounded-2xl p-5 flex flex-col items-center justify-center h-[280px] text-slate-400">
         <Activity className="w-8 h-8 text-slate-500 mb-2" />
         <p className="text-sm">Terrain profile is not available in Flat Earth mode.</p>
         <p className="text-xs text-slate-500 mt-1">Provide an OpenTopography API key to download SRTM terrain profiles.</p>
@@ -57,7 +58,7 @@ export default function TerrainChart({
 
   if (!profileData || profileData.length === 0) {
     return (
-      <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col items-center justify-center h-[280px] text-slate-400">
+      <div className="glass-panel rounded-2xl p-5 flex flex-col items-center justify-center h-[280px] text-slate-400">
         <Activity className="w-8 h-8 text-slate-500 mb-2" />
         <p className="text-sm text-center">Select a CPE site or use the map Ruler to view the terrain profile.</p>
       </div>
@@ -167,7 +168,7 @@ export default function TerrainChart({
   };
 
   return (
-    <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-4 space-y-4 relative">
+    <div className="glass-panel rounded-2xl p-4 space-y-4 relative">
       <div className="flex items-center justify-between border-b border-white/5 pb-3 gap-2">
         <div className="flex items-center gap-2">
           <Activity className="w-4 h-4 text-blue-400" />

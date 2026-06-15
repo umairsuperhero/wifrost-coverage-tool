@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { CheckCircle2, AlertTriangle, FileText, Loader2 } from "lucide-react";
 import axios from "axios";
+import { cn } from "../lib/utils";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
@@ -71,8 +72,8 @@ export default function ResultsBanner({
     <div
       className={`p-4 rounded-2xl border flex flex-col gap-4 transition-all duration-300 ${
         isSuccess
-          ? "bg-emerald-500/[0.03] border-emerald-500/20 text-emerald-300"
-          : "bg-amber-500/[0.03] border-amber-500/20 text-amber-300"
+          ? "glass-panel border-emerald-500/20 text-emerald-300"
+          : "glass-panel border-amber-500/20 text-amber-300"
       }`}
     >
       <div className="flex items-start gap-3">

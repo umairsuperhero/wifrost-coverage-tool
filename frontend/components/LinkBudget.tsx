@@ -41,56 +41,56 @@ export default function LinkBudget({
       <div className="p-4 border-t border-white/5 space-y-2.5 bg-black/25">
         <div className="flex justify-between text-xs">
           <span className="text-slate-400">TX Power</span>
-          <span className="text-white/95 font-medium tabular-nums">{fmtSigned(txPowerDbm, "dBm")}</span>
+          <span className="text-white/95 font-medium font-mono">{fmtSigned(txPowerDbm, "dBm")}</span>
         </div>
         <div className="flex justify-between text-xs">
           <span className="text-slate-400">BTS Antenna Gain</span>
-          <span className="text-white/95 font-medium tabular-nums">{fmtSigned(antennaGainDbi, "dBi")}</span>
+          <span className="text-white/95 font-medium font-mono">{fmtSigned(antennaGainDbi, "dBi")}</span>
         </div>
         <div className="flex justify-between text-xs">
           <span className="text-slate-400">Cable Loss</span>
-          <span className="text-white/95 font-medium tabular-nums">{fmtLoss(cableLossDb, "dB")}</span>
+          <span className="text-white/95 font-medium font-mono">{fmtLoss(cableLossDb, "dB")}</span>
         </div>
 
         <div className="border-t border-white/5 my-2" />
 
         <div className="flex justify-between text-xs font-bold">
           <span className="text-blue-400">EIRP</span>
-          <span className="text-blue-400 tabular-nums">{fmtSigned(eirpDbm, "dBm")}</span>
+          <span className="text-blue-400 font-mono">{fmtSigned(eirpDbm, "dBm")}</span>
         </div>
 
         <div className="border-t border-white/5 my-2" />
 
         <div className="flex justify-between text-xs">
           <span className="text-slate-400">Rx Sensitivity</span>
-          <span className="text-white/95 font-medium tabular-nums">{fmtSigned(cpeSensitivityDbm, "dBm")}</span>
+          <span className="text-white/95 font-medium font-mono">{fmtSigned(cpeSensitivityDbm, "dBm")}</span>
         </div>
         <div className="flex justify-between text-xs">
           <span className="text-slate-400">Rx Antenna Gain</span>
-          <span className="text-white/95 font-medium tabular-nums">{fmtSigned(cpeGainDbi, "dBi")}</span>
+          <span className="text-white/95 font-medium font-mono">{fmtSigned(cpeGainDbi, "dBi")}</span>
         </div>
         <div className="flex justify-between text-xs">
           <span className="text-slate-400">Rx Cable Loss</span>
-          <span className="text-white/95 font-medium tabular-nums">{fmtLoss(cpeCableLossDb, "dB")}</span>
+          <span className="text-white/95 font-medium font-mono">{fmtLoss(cpeCableLossDb, "dB")}</span>
         </div>
         <div className="flex justify-between text-xs">
           <span className="text-slate-400">System Margin</span>
-          <span className="text-white/95 font-medium tabular-nums">{fmtLoss(systemMarginDb, "dB")}</span>
+          <span className="text-white/95 font-medium font-mono">{fmtLoss(systemMarginDb, "dB")}</span>
         </div>
 
         <div className="border-t border-white/5 my-2" />
 
         <div className="flex justify-between text-xs font-bold">
           <span className="text-white">Max Allowed PL</span>
-          <span className="text-white tabular-nums">{fmtUnsigned(maxAllowedPathLoss, "dB")}</span>
+          <span className="text-white font-mono">{fmtUnsigned(maxAllowedPathLoss, "dB")}</span>
         </div>
 
         <div className="flex justify-between text-xs pt-1">
           <span className="text-slate-400">Max Range (sim)</span>
           {maxRangeKm !== null ? (
-            <span className="text-emerald-400 font-bold tabular-nums">{maxRangeKm.toFixed(1)} km</span>
+            <span className="text-emerald-400 font-bold font-mono">{maxRangeKm.toFixed(1)} km</span>
           ) : (
-            <span className="text-slate-500 tabular-nums">—</span>
+            <span className="text-slate-500 font-mono">—</span>
           )}
         </div>
       </div>
