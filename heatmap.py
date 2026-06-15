@@ -697,7 +697,9 @@ def fetch_basemap_image(north, south, east, west, width_px, height_px):
         for y in range(y_min, y_max + 1):
             url = f"https://a.basemaps.cartocdn.com/light_all/{zoom}/{x}/{y}.png"
             try:
-                resp = requests.get(url, timeout=5)
+                headers = {'User-Agent': 'WiFrost-Coverage-Tool/1.0'}
+                resp = requests.get(url, headers=headers, timeout=5)
+                resp.raise_for_status()
                 tiles[(x, y)] = Image.open(BytesIO(resp.content)).convert("RGBA")
             except Exception:
                 tiles[(x, y)] = Image.new("RGBA", (256, 256), (245, 246, 250, 255))
