@@ -1,5 +1,37 @@
 # Changelog
 
+## [Unreleased] — branch `feature/spatial-glass-maplibre` (not yet in production)
+
+> This branch is the new ITM-Longley-Rice UI/backend. It is kept **separate from
+> production (`main`)** until the owner approves a release — see CLAUDE.md
+> "Branch & Deployment Protocol".
+
+### Fixed
+- **Restored `okumura_hata()` in `propagation.py`** so `api.py`, `heatmap.py`,
+  `app.py` and `test_propagation_model.py` import again. Commit `64384ce` removed
+  the function during the Longley-Rice swap but left these callers, so this branch
+  could not boot or deploy (`import api` raised `ImportError`). Verified with the
+  new smoke test. (Phase 0 of the 2026-06-18 review.)
+
+### Added
+- **`test_smoke.py`** — offline import + coverage-grid smoke test that fails fast on
+  the "removed symbol still imported" class of regression. Run before any deploy.
+- **Functional anti-hallucination verification system** (`.claude/`):
+  - `hooks/verify-edit.sh` (PostToolUse): `py_compile` on `.py` writes, `tsc --noEmit`
+    on `.ts/.tsx` writes — fabricated imports/symbols fail immediately.
+  - `hooks/verify-stop.sh` (Stop): runs `test_smoke.py` before a session can end.
+  - Replaces the previously non-functional `settings.json` hooks (the
+    `Write(.ts|.tsx)` matchers never matched a tool name, `$file`/`ruff`/`pyright`
+    were unavailable, and the `Stop` block was nested outside `hooks`).
+- **`docs/code-review-2026-06-18.md`** — full architecture/physics review with a
+  phased action plan (model unification, perf, robustness).
+
+### Changed
+- **CLAUDE.md deployment rules** rewritten: production (`main`) is frozen during
+  feature work; commit/push to the feature branch only; never auto-push `main` or
+  deploy to production. Documents the Layer-3 hooks and the fact-checker subagent.
+- `.claude/settings.local.json` (personal permission grants) is now git-ignored.
+
 ## [2.1.1] — 2026-06-04
 
 ### Changed
