@@ -695,7 +695,7 @@ def fetch_basemap_image(north, south, east, west, width_px, height_px):
     tiles = {}
     for x in range(x_min, x_max + 1):
         for y in range(y_min, y_max + 1):
-            url = f"https://a.basemaps.cartocdn.com/light_all/{zoom}/{x}/{y}.png"
+            url = f"https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{zoom}/{y}/{x}"
             try:
                 headers = {'User-Agent': 'WiFrost-Coverage-Tool/1.0'}
                 resp = requests.get(url, headers=headers, timeout=5)
