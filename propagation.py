@@ -201,6 +201,32 @@ def itm_longley_rice(profile_m: List[float], dz_m: float,
     return fspl, diffraction
 
 
+# ── Okumura-Hata (legacy / "flat" model path) ──────────────────────────────────
+# Retained for the non-terrain `flat` model option in /api/cpe-analysis and for
+# the heatmap's vectorized grid kernel, which inlines this same formula. The
+# deterministic terrain path uses ITM Longley-Rice (itm_longley_rice) instead.
+
+def okumura_hata(d_km: float, f_mhz: float, hb_m: float,
+                 hm_m: float = 2.0, environment: str = 'open') -> float:
+    """Path loss (dB) — Okumura-Hata. Open-area correction capped at 20 dB."""
+    d_km = max(0.01, d_km)
+    hb_m = max(1.0, hb_m)
+    hm_m = max(1.0, hm_m)
+
+    a_hm = (1.1 * math.log10(f_mhz) - 0.7) * hm_m - (1.56 * math.log10(f_mhz) - 0.8)
+    loss = (69.55 + 26.16 * math.log10(f_mhz) - 13.82 * math.log10(hb_m) - a_hm
+            + (44.9 - 6.55 * math.log10(hb_m)) * math.log10(d_km))
+
+    if environment in ('open', 'open_water'):
+        raw_corr = 4.78 * (math.log10(f_mhz)) ** 2 - 18.33 * math.log10(f_mhz) + 40.94
+        loss -= min(raw_corr, OPEN_AREA_CORRECTION_CAP_DB)
+    elif environment in ('suburban', 'vegetation_light', 'vegetation_dense', 'port_industrial'):
+        loss -= 2.0 * (math.log10(f_mhz / 28.0)) ** 2 + 5.4
+
+    fspl = 20.0 * math.log10(d_km) + 20.0 * math.log10(f_mhz) + 32.44
+    return float(max(loss, fspl))
+
+
 # ── Path loss result ──────────────────────────────────────────────────────────
 
 class PathLossResult:
