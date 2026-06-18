@@ -511,9 +511,11 @@ export default function Home() {
             sites: parsedData.sites,
           });
           setTerrainProfile(res.data);
+          const profileLen = res.data.profile?.length || 0;
+          const lastPoint = profileLen > 0 ? res.data.profile[profileLen - 1] : null;
           setSelectedCpe({
             name: "Measured Path",
-            distance_km: res.data.profile?.[res.data.profile.length - 1]?.distance_km || 0.0,
+            distance_km: lastPoint?.distance_km || 0.0,
             elevation_m: res.data.cpe_elevation || 0.0,
             rssi_dbm: 0.0,
             margin_db: 0.0,
