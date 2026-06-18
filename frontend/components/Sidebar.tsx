@@ -553,7 +553,7 @@ export default function Sidebar({
             <div className="space-y-1.5">
               <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40 flex items-center gap-1.5">
                 Propagation Model
-                <Tooltip content="Terrain-Aware: Okumura-Hata propagation calculated over real elevation data from SRTM. Flat Hata: Standard Hata formula assuming a flat plain." />
+                <Tooltip content="Terrain-Aware: Longley-Rice (ITM) propagation calculated over real elevation data from SRTM. Flat Terrain: Standard Longley-Rice assuming a flat plain." />
               </label>
               <div className="flex glass-panel rounded-xl p-0.5 gap-0.5">
                 <button
@@ -576,7 +576,7 @@ export default function Sidebar({
                       : "text-white/40 hover:text-white/70"
                   }`}
                 >
-                  Flat Hata
+                  Flat Terrain
                 </button>
               </div>
             </div>
@@ -586,7 +586,7 @@ export default function Sidebar({
           <div className="space-y-1.5">
             <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40 flex items-center gap-1.5">
               Clutter Environment
-              <Tooltip content="Auto derives the environment from ESA WorldCover land cover for the area — recommended, avoids biasing results with a wrong manual pick. Per-pixel clutter is always applied from land cover when available; this setting controls the Hata correction type. Manual: Open (3 dB), Open Water (0 dB), Suburban (8 dB), Light Vegetation (6 dB), Dense Vegetation (15 dB), Port/Industrial (12 dB), Urban (18 dB)." />
+              <Tooltip content="Auto derives the environment from ESA WorldCover land cover for the area — recommended, avoids biasing results with a wrong manual pick. Per-pixel clutter is always applied from land cover when available; this setting controls the baseline parameters. Manual: Open (3 dB), Open Water (0 dB), Suburban (8 dB), Light Vegetation (6 dB), Dense Vegetation (15 dB), Port/Industrial (12 dB), Urban (8 dB)." />
             </label>
             <select
               value={environment}
