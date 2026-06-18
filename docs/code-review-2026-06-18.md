@@ -22,12 +22,20 @@ $ python -c "import api"     → ImportError: cannot import name 'okumura_hata' 
 $ python -c "import heatmap"  → ImportError: cannot import name 'okumura_hata' from 'propagation'
 ```
 
-**Implications:**
-1. The Render backend that responded "healthy" last session is serving a **stale build** from before `64384ce`. The new code (Longley-Rice + ESA WorldCover clutter + auto-environment + MDT) has **never successfully deployed** — every deploy since `64384ce` would have crash-looped on import, and Render keeps the last good container alive.
-2. Therefore the **Longley-Rice model the product claims to run is not actually live.** The deployed engine is still the old Okumura-Hata build. This is the direct answer to "ensure the Longley-Rice calculations… are being picked up correctly": right now they are not picked up at all.
-3. The cold-start retry fix shipped last session is treating a symptom; the real reason a fresh deploy can fail is the import error, not (only) free-tier sleep.
+> **Update (verified later in this review):** the breakage is confined to the
+> `feature/spatial-glass-maplibre` branch. `origin/main` still defines
+> `okumura_hata` and is the live production build. Production backend is **Google
+> Cloud Run** (`wifrost-api`, northamerica-south1) — verified `HTTP 200` — **not
+> Render** (the Render URL from a different/older clone is now unreachable). The
+> import bug was fixed in commit `3b572f4`; the rest of this section is corrected
+> to that understanding below.
 
-**This must be fixed before any physics tuning is meaningful** — you cannot validate a model that the server can't load.
+**Implications:**
+1. The Longley-Rice + ESA WorldCover + auto-environment + MDT work lives only on the unmerged `feature/spatial-glass-maplibre` branch, which **could not boot** in its broken state. On Cloud Run a revision that crashes on container start (`uvicorn api:app`) is rejected and the previous healthy revision keeps serving — so even an attempted deploy of this branch would not have gone live.
+2. Therefore the **Longley-Rice model is not in production.** Production (Cloud Run, built from `main`) still runs the old **Okumura-Hata** engine. This is the direct answer to "ensure the Longley-Rice calculations… are being picked up correctly": they are not live yet — they're on this branch, which now at least imports.
+3. The cold-start retry fix shipped in a prior session (in a separate clone) was treating a symptom; the reason *this* branch could not deploy was the import error, independent of any cold-start behaviour.
+
+**This had to be fixed before any physics tuning was meaningful** — you cannot validate a model the server can't load. (Done: `3b572f4`.)
 
 ---
 
@@ -74,11 +82,11 @@ The "auto" path is wired (`api.py:328-331`, `569-572` → `landcover.recommend_e
 
 ## 2. Architecture & Best Practices
 
-### 🟠 2.1 FastAPI concurrency on a 0.1-CPU / 512 MB free tier
-All routes are sync `def` (`api.py:131,167,262,544,…`), so FastAPI runs them in the anyio threadpool — they won't block the event loop, which is correct. **But** the heavy work is CPU-bound NumPy + Python loops holding the GIL; two concurrent `/api/simulate` calls will serialize and can blow the 512 MB limit (the `(nrows,ncols,100)` elevation array + WorldCover up to 512×512 + SRTM 1201×1201 all coexist). On free tier, **single-flight the simulate endpoint** (a lock or a small queue) and/or cap grid size, rather than letting concurrent requests OOM the box.
+### 🟠 2.1 FastAPI concurrency on Cloud Run (1 vCPU / 2 GiB)
+Production runs on **Google Cloud Run** at `--cpu 1 --memory 2Gi --timeout 120` (per `cloudbuild.yaml`; memory was already raised from the 512 MiB default because 512 MiB OOM-killed the container — documented in that file). All routes are sync `def` (`api.py:131,167,262,544,…`), so FastAPI runs them in the anyio threadpool — they won't block the event loop, which is correct. **But** the heavy work is CPU-bound NumPy + Python loops holding the GIL; with a single vCPU, concurrent `/api/simulate` calls serialize, and the per-request footprint (the `(nrows,ncols,100)` elevation array + WorldCover up to 512×512 + SRTM 1201×1201) means a few simultaneous requests can still approach the 2 GiB ceiling. Recommendation: **single-flight the simulate endpoint** (a lock or small queue) and/or cap grid size, and let Cloud Run's concurrency setting bound parallel requests, rather than relying on headroom.
 
 ### 🟠 2.2 In-memory state is fragile and not concurrency-safe
-- `_simulation_cache` (`api.py:59-60`, max 20) is a plain dict. The check-then-evict (`api.py:433-435`) is a race under the threadpool, and the cache is **lost on every Render restart/cold start**.
+- `_simulation_cache` (`api.py:59-60`, max 20) is a plain dict. The check-then-evict (`api.py:433-435`) is a race under the threadpool, and the cache is **lost on every Cloud Run cold start / new revision** (its filesystem and memory are ephemeral — DEPLOYMENT.md confirms this, and the SQLite history at `/app/data` resets too).
 - `/api/generate-report` depends on the grid being in that cache. After 20 sims or any restart, report generation for an older run silently breaks. Persist the grid (or recompute deterministically from params) instead of relying on volatile memory.
 
 ### 🔵 2.3 Frontend state management is at the edge of what `useState` should carry
@@ -136,7 +144,7 @@ The legend and panels use hard-coded absolute offsets keyed to sidebar state (`M
 | 1.3 | ITM/terrain failures silently fall back to optimistic FSPL | 🟠 Warning |
 | 1.4 | Built-up double-penalty (urban env + clutter); hand-tuned, undocumented | 🟠 Warning |
 | 1.5 | CPE MDT vertical angle ignores terrain ASL (map/dot mismatch) | 🟠 Warning |
-| 2.1 | Sync CPU-bound routes can OOM/serialize on 0.1-CPU/512 MB free tier | 🟠 Warning |
+| 2.1 | Sync CPU-bound routes serialize on Cloud Run's single vCPU; large requests still pressure the 2 GiB ceiling | 🟠 Warning |
 | 2.2 | Volatile, non-thread-safe in-memory cache; report depends on it | 🟠 Warning |
 | 4.1 | `fetch_basemap_image`: fixed zoom, pole failure, tile blowup, unclamped crop | 🟠 Warning |
 | 1.6 | `hpbw`/`vpbw` = 0 → divide-by-zero into RSSI (no validation) | 🔵 Opt |
@@ -150,7 +158,7 @@ The legend and panels use hard-coded absolute offsets keyed to sidebar state (`M
 
 **Phase 0 — Make it boot & deploy (blocks everything).**
 1. Resolve the `okumura_hata` import in `heatmap.py`, `api.py`, `app.py`, `test_propagation_model.py`. Decision required (see questions below): re-add a thin `okumura_hata()` shim, or rip the Hata grid path out entirely in favor of ITM.
-2. Add a CI smoke test: `python -c "import api, heatmap, app"` + one `/api/simulate` call on a tiny fixture. This single test would have caught finding #0. Wire it as a Render pre-deploy / GitHub Action gate.
+2. Add a CI smoke test: `python -c "import api, heatmap, app"` + one `/api/simulate` call on a tiny fixture. This single test would have caught finding #0. Wire it as a Cloud Build pre-deploy step / GitHub Action gate. *(Done: `test_smoke.py` + a Stop hook now run it locally; CI gating still TODO.)*
 3. Redeploy and confirm via `/api/defaults` build hash that the *new* code is actually live.
 
 **Phase 1 — Make the physics consistent and correct.**
@@ -160,8 +168,8 @@ The legend and panels use hard-coded absolute offsets keyed to sidebar state (`M
 7. Document the clutter calibration (§1.4) or replace the magic 8 dB with a derived value; add a regression test asserting urban ≥ suburban ≥ open ordering at a reference link.
 
 **Phase 2 — Performance & robustness.**
-8. Vectorize the grid diffraction kernel (§1.8) — target <2 s for a 100×100 grid; this also blunts the cold-start pain.
-9. Single-flight / size-cap the simulate endpoint for the free tier (§2.1); persist or recompute report inputs instead of the volatile cache (§2.2).
+8. Vectorize the grid diffraction kernel (§1.8) — target <2 s for a 100×100 grid; this is the dominant per-request simulate latency.
+9. Single-flight / size-cap the simulate endpoint and tune Cloud Run's max-concurrency (§2.1); persist or recompute report inputs instead of the volatile in-memory cache (§2.2).
 10. Harden `fetch_basemap_image`: derive zoom from extent, clamp to ±85.05°, clamp crop, cap tile count, fix the provider label (§4.1).
 
 **Phase 3 — Frontend & a11y polish.**
@@ -170,7 +178,7 @@ The legend and panels use hard-coded absolute offsets keyed to sidebar state (`M
 
 ---
 
-## Decisions needed from you
-1. **One model or two?** Standardize on ITM Longley-Rice for both map and dots (recommended), or keep Hata for the fast grid and document the divergence honestly?
-2. **Free tier or paid?** Several robustness items (concurrency, cold start, persistent cache) largely dissolve on Render Starter. `render.yaml` already specifies `plan: starter` — is the intent to move off free tier?
-3. Scope of this pass: do you want me to execute **Phase 0** now (un-break the build) as a focused fix, and leave Phases 1–3 as planned follow-ups?
+## Decisions — status (resolved 2026-06-18)
+1. **One model or two?** → **Decided: ITM Longley-Rice everywhere.** Phase 1 replaces the Hata+Deygout grid kernel with the deterministic ITM path so map and dots share one model.
+2. **Hosting.** Corrected premise: this is **not** Render and there is **no `render.yaml`** here. Production is **Google Cloud Run** (`wifrost-api`, `--cpu 1 --memory 2Gi`, scales to zero — effectively pay-per-use, near-zero idle cost). The owner's "stay on the lighter tier" intent is satisfied as-is; the robustness items (single-vCPU serialization, ephemeral cache/history) still apply and are addressed in Phase 2 rather than by upsizing.
+3. **Scope.** → **Phase 0 executed** (build un-broken, commit `3b572f4`; smoke test + hooks added). Phases 1–3 remain planned follow-ups. All work stays on `feature/spatial-glass-maplibre`; production `main` is frozen until the owner approves a release.
