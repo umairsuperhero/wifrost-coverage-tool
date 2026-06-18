@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import Map, { Source, Layer, Marker, Popup, NavigationControl, MapRef } from "react-map-gl/maplibre";
+import Map, { Source, Layer, Marker, Popup, NavigationControl, ScaleControl, MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { MousePointer, Ruler, MapPin } from "lucide-react";
 import * as turf from "@turf/turf";
@@ -172,6 +172,14 @@ export default function MapInner({
     return turf.featureCollection(filteredFeatures);
   }, [coverageGeojson, activeThreshold]);
 
+  // Measure path GeoJSON
+  const measureGeoJSON = useMemo(() => {
+    if (measurePoints.length < 2) return null;
+    return turf.featureCollection([
+      turf.lineString([[measurePoints[0][1], measurePoints[0][0]], [measurePoints[1][1], measurePoints[1][0]]])
+    ]);
+  }, [measurePoints]);
+
   return (
     <div className={`w-full h-full relative ${mapMode !== "normal" ? "cursor-crosshair" : ""}`}>
       <Map
@@ -182,6 +190,27 @@ export default function MapInner({
         interactiveLayerIds={['coverage-fill']}
       >
         <NavigationControl position="bottom-right" />
+        <ScaleControl position="bottom-right" />
+
+        {/* Measure Points and Lines */}
+        {measurePoints.map((pt, i) => (
+          <Marker key={`measure-${i}`} latitude={pt[0]} longitude={pt[1]} anchor="center">
+            <div className="w-4 h-4 bg-white border-2 border-primary rounded-full shadow-[0_0_10px_rgba(255,255,255,0.8)]" />
+          </Marker>
+        ))}
+        {measureGeoJSON && (
+          <Source id="measure-line-source" type="geojson" data={measureGeoJSON as any}>
+            <Layer
+              id="measure-line"
+              type="line"
+              paint={{
+                "line-color": "#ffffff",
+                "line-width": 3,
+                "line-dasharray": [2, 2]
+              }}
+            />
+          </Source>
+        )}
 
         {/* Heatmap GeoJSON */}
         {filteredCoverage && (
