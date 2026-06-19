@@ -14,6 +14,13 @@ from propagation import (terrain_aware_loss, okumura_hata, compute_eirp, compute
 from terrain import TerrainGrid, get_elevation, get_elevation_np
 
 
+# Max number of terrain-profile sample points (rows * cols * 100) materialised at once
+# in the terrain-aware step. get_elevation_np allocates ~20 temporaries of this size, so
+# the full grid would blow past Cloud Run's 2 GiB on large AOIs; we process in row-blocks
+# sized to this budget instead. ~1M points keeps a block's peak well under ~200 MB.
+_PROFILE_BLOCK_ELEMENTS = 1_000_000
+
+
 # ── Data classes ──────────────────────────────────────────────────────────────
 
 @dataclass
@@ -339,32 +346,40 @@ def compute_coverage_grid(bts_site: Any, equipment_bts: Any, equipment_cpe: Any,
     # hill/ridge obstruction. The pure flat model (model != 'terrain_aware') skips
     # this for a quick, horizon-unlimited estimate.
     if model == 'terrain_aware':
-        # Precompute profile coordinates for all cells
-        t_points = np.linspace(0, 1.0, 100) # (100,)
-        
-        # 3D coordinate grids of shape (nrows, ncols, 100)
-        lats_3d = bts_lat + t_points[np.newaxis, np.newaxis, :] * (lats_2d[:, :, np.newaxis] - bts_lat)
-        lons_3d = bts_lon + t_points[np.newaxis, np.newaxis, :] * (lons_2d[:, :, np.newaxis] - bts_lon)
-        
-        # Get elevations for all profile points at once (O(1) database/cache roundtrip)
-        elevations_flat = get_elevation_np(terrain_grid, lats_3d.ravel(), lons_3d.ravel())
-        elevations_3d = elevations_flat.reshape(nrows, ncols, 100)
-
+        t_points = np.linspace(0, 1.0, 100)  # (100,)
         diffraction_array = np.zeros((nrows, ncols))
         rx_asls = rx_grounds + cpe_height
 
-        for r in range(nrows):
-            for c in range(ncols):
-                dist_km = distances_km[r, c]
-                if dist_km <= 0.05:
-                    continue
-                d_arr = dist_km * t_points
-                # Add earth-curvature bulge so beyond-horizon paths are correctly
-                # obstructed (realistic radio horizon) rather than appearing as LoS.
-                bulge = (d_arr * (dist_km - d_arr)) / (2.0 * EFFECTIVE_EARTH_RADIUS_KM) * 1000.0
-                e_arr = elevations_3d[r, c] + bulge
-                diffraction_array[r, c] = deygout_loss_np(d_arr, e_arr, bts_asl, rx_asls[r, c], f_mhz)
-                
+        # Build the (rows, cols, 100) profile coordinates and elevations in row-blocks
+        # instead of all at once. The full grid plus get_elevation_np's internal
+        # temporaries scale as nrows*ncols*100 and would exceed Cloud Run's 2 GiB on
+        # large AOIs; blocking by a fixed element budget bounds peak memory while leaving
+        # the per-cell math identical.
+        rows_per_block = max(1, _PROFILE_BLOCK_ELEMENTS // (ncols * 100))
+        for rb0 in range(0, nrows, rows_per_block):
+            rb1 = min(rb0 + rows_per_block, nrows)
+            block_lats = lats_2d[rb0:rb1]  # (rb, ncols)
+            block_lons = lons_2d[rb0:rb1]
+
+            # 3D coordinate grids of shape (rb, ncols, 100) for this block of rows
+            lats_3d = bts_lat + t_points[np.newaxis, np.newaxis, :] * (block_lats[:, :, np.newaxis] - bts_lat)
+            lons_3d = bts_lon + t_points[np.newaxis, np.newaxis, :] * (block_lons[:, :, np.newaxis] - bts_lon)
+            elevations_3d = get_elevation_np(
+                terrain_grid, lats_3d.ravel(), lons_3d.ravel()
+            ).reshape(rb1 - rb0, ncols, 100)
+
+            for r in range(rb0, rb1):
+                for c in range(ncols):
+                    dist_km = distances_km[r, c]
+                    if dist_km <= 0.05:
+                        continue
+                    d_arr = dist_km * t_points
+                    # Add earth-curvature bulge so beyond-horizon paths are correctly
+                    # obstructed (realistic radio horizon) rather than appearing as LoS.
+                    bulge = (d_arr * (dist_km - d_arr)) / (2.0 * EFFECTIVE_EARTH_RADIUS_KM) * 1000.0
+                    e_arr = elevations_3d[r - rb0, c] + bulge
+                    diffraction_array[r, c] = deygout_loss_np(d_arr, e_arr, bts_asl, rx_asls[r, c], f_mhz)
+
         loss_array += diffraction_array
 
     # Sector Gain
