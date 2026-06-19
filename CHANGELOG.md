@@ -12,6 +12,12 @@
   the function during the Longley-Rice swap but left these callers, so this branch
   could not boot or deploy (`import api` raised `ImportError`). Verified with the
   new smoke test. (Phase 0 of the 2026-06-18 review.)
+- **Atomic SRTM cache writes in `terrain.py`.** The shared `cache/*.npy`/`*.meta`
+  files were written in place (`np.save` / `open('w')`), so concurrent requests for
+  the same region could read a half-written array (corruption) or interleave two
+  writers. Writes now go to a temp file in the same directory and are `os.replace()`d
+  into place (atomic on POSIX); the meta is published before the array because the
+  reader checks the `.npy` first. (Finding #4 of the 2026-06-19 audit.)
 
 ### Added
 - **`test_smoke.py`** — offline import + coverage-grid smoke test that fails fast on
@@ -25,6 +31,25 @@
     were unavailable, and the `Stop` block was nested outside `hooks`).
 - **`docs/code-review-2026-06-18.md`** — full architecture/physics review with a
   phased action plan (model unification, perf, robustness).
+
+### Performance
+- **`heatmap.py` terrain-aware step now processes the elevation profile in
+  row-blocks** instead of materialising three `(rows, cols, 100)` float64 arrays
+  (plus ~20 same-sized temporaries inside `get_elevation_np`) for the whole grid at
+  once. Peak RAM scaled as `rows*cols*100` — ~2 GB for a 400×400 grid — risking OOM
+  on the 2 GiB Cloud Run instance. Now blocked by a fixed element budget; output
+  verified bit-identical to the single-block result. (Finding #3.)
+- **Removed the dead `hoverPoint` re-render cascade (frontend).** Hovering the terrain
+  profile pushed a geographic point into root state that was threaded into the map but
+  never rendered, forcing a full-app re-render at mouse-move rate for no visual effect.
+  Removed the state and plumbing; the on-chart tooltip (local `hoverIdx`) is unchanged.
+  (Finding #1.)
+
+### Known / deferred
+- **CPE list windowing (Finding #2).** `CpeTable` renders every filtered CPE card into
+  the DOM; large deployments (thousands of CPEs) bloat the DOM. The fix (windowing /
+  `content-visibility`) changes scroll/layout behaviour, so it is deferred until it can
+  be verified against the running UI rather than shipped blind.
 
 ### Changed
 - **CLAUDE.md deployment rules** rewritten: production (`main`) is frozen during
