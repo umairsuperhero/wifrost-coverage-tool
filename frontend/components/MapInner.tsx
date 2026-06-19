@@ -58,7 +58,6 @@ interface MapInnerProps {
   onAddCpe?: (lat: number, lng: number) => void;
   mapMode?: "normal" | "measure" | "addcpe";
   setMapMode?: (mode: "normal" | "measure" | "addcpe") => void;
-  hoverPoint?: [number, number] | null;
   opacity?: number;
   setOpacity?: (opacity: number) => void;
   mapTheme?: "dark" | "satellite" | "street";
@@ -85,7 +84,6 @@ export default function MapInner({
   onAddCpe,
   mapMode = "normal",
   setMapMode,
-  hoverPoint,
   opacity = 0.45,
   setOpacity,
   mapTheme = "dark",

@@ -166,7 +166,6 @@ export default function Home() {
   // Map Toolbar & Premium Controls States
   const [mapMode, setMapMode] = useState<"normal" | "measure" | "addcpe">("normal");
   const [manualCpeCount, setManualCpeCount] = useState<number>(0);
-  const [hoverPoint, setHoverPoint] = useState<[number, number] | null>(null);
   const [mapOpacity, setMapOpacity] = useState<number>(0.45);
   const [mapTheme, setMapTheme] = useState<"dark" | "satellite" | "street">("dark");
   const [measurePoints, setMeasurePoints] = useState<[number, number][]>([]);
@@ -690,7 +689,6 @@ export default function Home() {
           onAddCpe={handleAddCpe}
           mapMode={mapMode}
           setMapMode={setMapMode}
-          hoverPoint={hoverPoint}
           opacity={mapOpacity}
           setOpacity={setMapOpacity}
           mapTheme={mapTheme}
@@ -926,7 +924,6 @@ export default function Home() {
                                     btsLon={btsLonForProfile}
                                     cpeLat={selectedCpe?.latitude}
                                     cpeLon={selectedCpe?.longitude}
-                                    onHoverPoint={setHoverPoint}
                                     onMaximize={() => setIsTerrainModalOpen(true)}
                                   />
                                 );
@@ -1026,7 +1023,6 @@ export default function Home() {
                     btsLon={btsLonForProfile}
                     cpeLat={selectedCpe?.latitude}
                     cpeLon={selectedCpe?.longitude}
-                    onHoverPoint={setHoverPoint}
                   />
                 );
               })()}

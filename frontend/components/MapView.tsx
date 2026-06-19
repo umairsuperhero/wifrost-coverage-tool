@@ -31,7 +31,6 @@ interface MapViewProps {
   onAddCpe?: (lat: number, lng: number) => void;
   mapMode?: "normal" | "measure" | "addcpe";
   setMapMode?: (mode: "normal" | "measure" | "addcpe") => void;
-  hoverPoint?: [number, number] | null;
   opacity?: number;
   setOpacity?: (opacity: number) => void;
   mapTheme?: "dark" | "satellite" | "street";
