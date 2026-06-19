@@ -1,6 +1,7 @@
 import os
 import time
 import math
+import tempfile
 import requests
 import numpy as np
 from dataclasses import dataclass
@@ -45,6 +46,24 @@ def create_flat_terrain(bounds: Dict[str, float]) -> TerrainGrid:
                        ncols=ncols, nrows=nrows, cellsize=cellsize,
                        xllcorner=min_lon, yllcorner=min_lat,
                        nodata_value=-9999.0, is_flat=True)
+
+
+def _atomic_write(path: str, mode: str, writer) -> None:
+    """Create or replace `path` atomically: write to a temp file in the same directory
+    via `writer(file_obj)`, then os.replace() it into place. Prevents a concurrent reader
+    from observing a half-written cache file (the SRTM cache is shared across requests)."""
+    dir_name = os.path.dirname(path) or "."
+    fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+    try:
+        with os.fdopen(fd, mode) as f:
+            writer(f)
+        os.replace(tmp_path, path)
+    except BaseException:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def fetch_srtm(bounds: Dict[str, float], api_key: str = None) -> TerrainGrid:
@@ -141,11 +160,14 @@ def fetch_srtm(bounds: Dict[str, float], api_key: str = None) -> TerrainGrid:
         if array.shape != (nrows, ncols):
             return create_flat_terrain(bounds)
 
-        np.save(npy_path, array)
-        with open(meta_path, 'w') as f:
-            f.write(f"ncols={ncols}\nnrows={nrows}\ncellsize={cellsize}\n"
-                    f"xllcorner={xllcorner}\nyllcorner={yllcorner}\n"
-                    f"nodata_value={nodata_value}\n")
+        # Publish to the shared cache atomically. Write the meta first and the array
+        # last: the reader above checks the .npy before the .meta, so making the .npy
+        # the final thing to appear guarantees a hit never sees array-without-meta.
+        meta_text = (f"ncols={ncols}\nnrows={nrows}\ncellsize={cellsize}\n"
+                     f"xllcorner={xllcorner}\nyllcorner={yllcorner}\n"
+                     f"nodata_value={nodata_value}\n")
+        _atomic_write(meta_path, "w", lambda f: f.write(meta_text))
+        _atomic_write(npy_path, "wb", lambda f: np.save(f, array))
 
         return TerrainGrid(array=array, min_lat=min_lat, max_lat=max_lat,
                            min_lon=min_lon, max_lon=max_lon,
