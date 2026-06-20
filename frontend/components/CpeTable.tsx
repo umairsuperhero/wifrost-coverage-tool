@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Table, Download, Search, Check, AlertTriangle, X } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -83,8 +83,12 @@ export default function CpeTable({ cpeResults, selectedCpeName, onSelectCpe, sec
     document.body.removeChild(link);
   };
 
-  const filteredCpes = cpeResults.filter((cpe) =>
-    cpe.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredCpes = useMemo(
+    () =>
+      cpeResults.filter((cpe) =>
+        cpe.name.toLowerCase().includes(searchTerm.toLowerCase())
+      ),
+    [cpeResults, searchTerm]
   );
 
   const getStatusStyle = (status: string) => {
@@ -139,7 +143,7 @@ export default function CpeTable({ cpeResults, selectedCpeName, onSelectCpe, sec
           filteredCpes.map((cpe, idx) => {
             const isSelected = cpe.name === selectedCpeName;
             const tierVal = cpeTier(cpe);
-            
+
             // Tier color mappings
             const textTierColors = ["text-red-400", "text-amber-400", "text-emerald-400", "text-green-400"];
             const bgDotColors = [
@@ -165,14 +169,14 @@ export default function CpeTable({ cpeResults, selectedCpeName, onSelectCpe, sec
                     {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />}
                     {cpe.name}
                   </span>
-                  
+
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {cpe.serving_bts_name && (
                       <span className="text-[10px] text-slate-400 font-medium truncate max-w-[120px]">
                         📡 {cpe.serving_bts_name}
                       </span>
                     )}
-                    
+
                     {cpe.best_sector !== undefined && (
                       <span
                         className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-md"
