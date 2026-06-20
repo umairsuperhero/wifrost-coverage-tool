@@ -18,10 +18,18 @@
   writers. Writes now go to a temp file in the same directory and are `os.replace()`d
   into place (atomic on POSIX); the meta is published before the array because the
   reader checks the `.npy` first. (Finding #4 of the 2026-06-19 audit.)
+- **`api.cpe_analysis` no longer 500s with `NameError: name 'math' is not defined`.**
+  The CPE MDT vertical-angle line (`api.py:635`) called `math` without a module-level
+  `import math`, so every `POST /api/cpe-analysis` failed and the new UI's client
+  link-margin table came back empty. Found by running the feature-branch backend
+  locally end to end — the prod Cloud Run backend serves the older `main` build (no such
+  code), so the bug was invisible against prod. Added `import math` + an offline
+  regression test (`test_cpe_analysis_runs_offline`).
 
 ### Added
-- **`test_smoke.py`** — offline import + coverage-grid smoke test that fails fast on
-  the "removed symbol still imported" class of regression. Run before any deploy.
+- **`test_smoke.py`** — offline import + coverage-grid + cpe-analysis smoke tests that
+  fail fast on the "removed symbol still imported" / "used-but-unimported name" classes
+  of regression. Run before any deploy.
 - **Functional anti-hallucination verification system** (`.claude/`):
   - `hooks/verify-edit.sh` (PostToolUse): `py_compile` on `.py` writes, `tsc --noEmit`
     on `.ts/.tsx` writes — fabricated imports/symbols fail immediately.
@@ -46,10 +54,14 @@
   (Finding #1.)
 
 ### Known / deferred
-- **CPE list windowing (Finding #2).** `CpeTable` renders every filtered CPE card into
-  the DOM; large deployments (thousands of CPEs) bloat the DOM. The fix (windowing /
-  `content-visibility`) changes scroll/layout behaviour, so it is deferred until it can
-  be verified against the running UI rather than shipped blind.
+- **CPE list windowing (Finding #2) — still open.** `CpeTable` renders every filtered
+  CPE card into the DOM; large deployments (thousands of CPEs) bloat it. Two fixes were
+  tried live against the running UI and neither verified in this stack: `react-virtuoso`
+  mounted but rendered **zero** rows despite correct `data`/`itemContent` props (likely a
+  Next 16 / React 19 measurement or StrictMode issue), and `content-visibility: auto` did
+  **not** skip off-screen cards even at 600 items. Only a safe `useMemo` on the filter
+  shipped. Recommend revisiting with `@tanstack/react-virtual` or a production-build
+  retest of Virtuoso.
 
 ### Changed
 - **CLAUDE.md deployment rules** rewritten: production (`main`) is frozen during
