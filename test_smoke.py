@@ -56,6 +56,47 @@ def test_coverage_grid_runs_offline():
     assert "coverage_pct" in grid.stats
 
 
+def test_cpe_analysis_runs_offline():
+    """Exercise the /api/cpe-analysis kernel offline (flat terrain, stubbed land cover).
+
+    Guards the class of bug where the endpoint references a name it never imported.
+    This caught `NameError: name 'math' is not defined` in api.cpe_analysis (the MDT
+    vertical-angle line), which 500'd every CPE analysis on the branch.
+    """
+    import numpy as np
+    import api
+    from terrain import create_flat_terrain
+
+    # Keep it offline: no SRTM download, no WorldCover fetch.
+    api.fetch_srtm = lambda bounds, key="": create_flat_terrain(bounds)
+
+    class _NoLandcover:
+        available = False
+
+        def recommend_environment(self, default="suburban"):
+            return default
+
+        def get_clutter_db_np(self, lats, lons, default):
+            return np.full(len(lats), default)
+
+    api.fetch_landcover = lambda bounds: _NoLandcover()
+
+    req = api.CpeAnalysisRequest(
+        bts_index=-1,
+        sites=[
+            {"name": "BTS", "latitude": 40.015, "longitude": -105.27,
+             "is_bts_candidate": True, "height_m": 30.0, "site_type": "BTS"},
+            {"name": "CPE-1", "latitude": 40.005, "longitude": -105.26,
+             "is_bts_candidate": False, "height_m": 6.0, "site_type": "CPE"},
+        ],
+        frequency_mhz=570.0, model="terrain_aware", environment="open",
+        bts_height=30.0, tx_power_dbm=30.0, antenna_gain_dbi=12.0, cable_loss_db=1.0,
+        rx_gain_dbi=10.0, rx_cable_loss_db=0.5, rx_sensitivity_dbm=-90.0,
+    )
+    result = api.cpe_analysis(req)  # must not raise (NameError, etc.)
+    assert result is not None
+
+
 def main():
     failures = []
     for name, fn in sorted(globals().items()):
