@@ -209,6 +209,25 @@ export default function MapInner({
             />
           </Source>
         )}
+        {measurePoints.length === 2 && (
+          <Popup
+            latitude={(measurePoints[0][0] + measurePoints[1][0]) / 2}
+            longitude={(measurePoints[0][1] + measurePoints[1][1]) / 2}
+            closeButton={false}
+            closeOnClick={false}
+            anchor="bottom"
+            offset={10}
+            className="spatial-popup measure-popup"
+          >
+            <div className="text-sm font-mono font-bold text-primary">
+              {turf.distance(
+                turf.point([measurePoints[0][1], measurePoints[0][0]]),
+                turf.point([measurePoints[1][1], measurePoints[1][0]]),
+                { units: "kilometers" }
+              ).toFixed(2)} km
+            </div>
+          </Popup>
+        )}
 
         {/* Heatmap GeoJSON */}
         {filteredCoverage && (
