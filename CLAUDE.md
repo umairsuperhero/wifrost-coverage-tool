@@ -26,8 +26,25 @@ If you skip verification, prefix the code with a comment:
 
 Plan-then-execute mode is preferred for any task touching more than one file. Use Shift+Tab to enter plan mode before starting.
 
-## Deployment & Production Testing Protocol
+## Automated verification (Layer 3 — enforced by hooks)
 
-1. **Never leave changes hanging**: If a user asks to implement a feature or fix a bug, and you complete the local changes, you must immediately `git add`, `git commit -m "..."`, and `git push origin main`.
-2. **Verify Production Deployment**: After pushing, you must wait for the CI/CD pipeline (e.g. Vercel, Cloud Run) to complete and then explicitly verify that the changes are live on the production domain before claiming the task is complete.
-3. **Report Status**: Do not say "it is updated" until you have confirmed the push was successful and the production environment reflects the changes.
+These run automatically; do not disable them to make a task "pass".
+
+- **PostToolUse** → `.claude/hooks/verify-edit.sh`: every `.py` write is `py_compile`d and every `.ts/.tsx` write is type-checked with the frontend's `tsc --noEmit`. A fabricated import or symbol fails here immediately (exit 2 blocks and shows the error). Fix it before continuing — do not work around it.
+- **Stop** → `.claude/hooks/verify-stop.sh`: runs the offline `test_smoke.py` (imports + grid kernel) before a session can end, so "imports OK / it builds / done" cannot be claimed without proof.
+- **fact-checker subagent** → `.claude/agents/fact-checker.md`: invoke it before any commit and before any user-facing "done" summary to independently re-verify claims.
+
+When you add a new top-level Python module or a critical import path, extend `test_smoke.py` so the Stop hook guards it (this is the exact class of bug that broke `okumura_hata`).
+
+## Branch & Deployment Protocol
+
+This repo runs **two separate tracks. Keep them separate** until the owner says otherwise.
+
+- **Production (live, frozen):** the `main` branch and its deployed environments (Vercel / Render / Cloud Run). It serves the current shipped UI/backend. **Do not push to `main`, merge into it, or trigger a production deploy** as part of feature work.
+- **New UI / functionality (active dev):** the `feature/spatial-glass-maplibre` branch (Next.js + FastAPI, ITM Longley-Rice). All new work happens here and is validated independently of production.
+
+Rules:
+1. Commit and push feature work to the **feature branch only**: `git push origin feature/spatial-glass-maplibre`. Never `git push origin main` and never merge to `main` without an explicit instruction from the owner.
+2. Do not deploy feature work to a production domain. The new UI stays separate until the owner is happy with it.
+3. **Never leave changes hanging**: when you complete local changes, `git add` / `git commit` / push to the **feature branch**, and keep `CHANGELOG.md` updated.
+4. **Report status honestly**: "updated" means committed and pushed to the feature branch **and** the Stop-hook smoke test passed — always state which branch. Do not claim a production domain reflects the change unless you actually verified it (and you should not be deploying to production during feature work anyway).

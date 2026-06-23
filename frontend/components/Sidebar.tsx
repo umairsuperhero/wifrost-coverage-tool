@@ -5,6 +5,7 @@ import { Upload, Sliders, Play, Settings, AlertCircle, FileSpreadsheet, Compass,
 import axios from "axios";
 import CompassRose from "./CompassRose";
 import HistoryPanel from "./HistoryPanel";
+import { cn } from "../lib/utils";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
@@ -44,16 +45,29 @@ interface SidebarProps {
   onSectorChange?: (azimuths: number[], hpbw: number) => void;
   onLoadHistoryRun: (id: string) => void;
   showToast?: (message: string, type?: "success" | "error" | "warning") => void;
+  isExpanded: boolean;
+  onToggleExpanded: (val: boolean) => void;
+  terrainLoaded?: boolean | null;
 }
 
-export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSites, onSectorChange, onLoadHistoryRun, showToast }: SidebarProps) {
+export default function Sidebar({
+  onFileParsed,
+  onSimulate,
+  isLoading,
+  parsedSites,
+  onSectorChange,
+  onLoadHistoryRun,
+  showToast,
+  isExpanded,
+  onToggleExpanded,
+  terrainLoaded,
+}: SidebarProps) {
   const [file, setFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
   const [btsDefaults, setBtsDefaults] = useState<any>(null);
   const [cpeDefaults, setCpeDefaults] = useState<any>(null);
 
-  // History states
   const [activeTab, setActiveTab] = useState<"params" | "history">("params");
   const [historyRuns, setHistoryRuns] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -324,31 +338,87 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
   };
 
   return (
-    <aside className="w-[380px] bg-black/40 backdrop-blur-3xl border-r border-white/5 flex flex-col h-full overflow-hidden">
-      {/* Sidebar Tabs */}
-      <div className="flex border-b border-white/5/80 bg-black/20">
+    <div className="flex items-start gap-4 h-full pointer-events-none">
+      {/* VisionOS Ornament (Left Floating Toolbar) */}
+      <div className="flex flex-col items-center gap-4 glass-panel rounded-full p-2 py-4 pointer-events-auto shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-300">
         <button
-          onClick={() => setActiveTab("params")}
-          className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border-b-2 transition ${
-            activeTab === "params"
-              ? "border-blue-500 text-blue-450 font-bold bg-white/5"
-              : "border-transparent text-slate-500 hover:text-slate-350"
+          onClick={() => onToggleExpanded(!isExpanded)}
+          title="Toggle Parameters Panel"
+          className={`p-3 rounded-full transition-all duration-300 ${
+            isExpanded ? "bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.5)] text-white" : "text-slate-400 hover:text-white hover:bg-white/10"
           }`}
         >
-          <Sliders className="w-3.5 h-3.5" />
-          Parameters
+          <Sliders className="w-5 h-5" />
         </button>
+
         <button
-          onClick={() => setActiveTab("history")}
-          className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border-b-2 transition ${
-            activeTab === "history"
-              ? "border-blue-500 text-blue-450 font-bold bg-white/5"
-              : "border-transparent text-slate-500 hover:text-slate-350"
+          onClick={() => {
+            setActiveTab("history");
+            onToggleExpanded(true);
+          }}
+          title="Simulation History"
+          className={`p-3 rounded-full transition-all duration-300 ${
+            activeTab === "history" && isExpanded ? "bg-white/10 text-white" : "text-slate-400 hover:text-white hover:bg-white/10"
           }`}
         >
-          <History className="w-3.5 h-3.5" />
-          History
+          <History className="w-5 h-5" />
         </button>
+        
+        <div className="w-8 h-[1px] bg-white/10 my-1" />
+
+        <button
+          onClick={() => {
+            if (!isExpanded) onToggleExpanded(true);
+            else if (parsedSites.length > 0 && !isLoading) {
+              const runBtn = document.getElementById("simulate-btn");
+              if (runBtn) runBtn.click();
+            }
+          }}
+          disabled={isLoading || parsedSites.length === 0}
+          title="Run Simulation"
+          className="p-3 rounded-full bg-blue-600/80 hover:bg-blue-500 disabled:bg-slate-800 disabled:opacity-50 text-white transition-all duration-300"
+        >
+          {isLoading ? (
+            <span className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin block" />
+          ) : (
+            <Play className="fill-current w-5 h-5 ml-0.5" />
+          )}
+        </button>
+      </div>
+
+      {/* Expanded Modal Pane */}
+      <div
+        className={`transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden h-full pointer-events-auto ${
+          isExpanded ? "w-[320px] opacity-100 scale-100" : "w-0 opacity-0 scale-95 origin-left"
+        }`}
+      >
+        <aside className="w-[320px] glass-panel rounded-[2.5rem] flex flex-col h-full overflow-hidden">
+      {/* Sidebar Tabs (Segmented Control) */}
+      <div className="p-4 px-5 flex justify-center border-b border-white/5 shrink-0">
+        <div className="flex glass-panel rounded-full p-1 w-full max-w-full">
+          <button
+            onClick={() => setActiveTab("params")}
+            className={`flex-1 py-2 text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 rounded-full transition-all duration-300 ${
+              activeTab === "params"
+                ? "bg-white/10 text-white shadow-sm"
+                : "text-white/40 hover:text-white/70"
+            }`}
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            Parameters
+          </button>
+          <button
+            onClick={() => setActiveTab("history")}
+            className={`flex-1 py-2 text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 rounded-full transition-all duration-300 ${
+              activeTab === "history"
+                ? "bg-white/10 text-white shadow-sm"
+                : "text-white/40 hover:text-white/70"
+            }`}
+          >
+            <History className="w-3.5 h-3.5" />
+            History
+          </button>
+        </div>
       </div>
 
       {activeTab === "history" ? (
@@ -363,9 +433,9 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
         />
       ) : (
         <>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
             {/* File Upload Section */}
-      <div className="p-5 border-b border-white/5 space-y-4">
+      <div className="p-4 border-b border-white/5 space-y-3">
         <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
           <Upload className="w-4 h-4 text-blue-500" />
           1. Import Network Layout
@@ -375,7 +445,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className="border-2 border-dashed border-white/20 bg-white/[0.02] hover:bg-white/[0.04] rounded-xl p-6 text-center cursor-pointer transition-all duration-300 group"
+          className="border-2 border-dashed border-white/20 bg-white/[0.02] hover:bg-white/[0.04] rounded-xl p-4 text-center cursor-pointer transition-all duration-300 group"
         >
           <input
             type="file"
@@ -413,14 +483,26 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
       </div>
 
       {/* Simulation Parameters Section */}
-      <div className="p-5 flex-1 space-y-5">
-        <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-          <Sliders className="w-4 h-4 text-blue-500" />
-          2. Simulation Parameters
-        </h2>
+      <div className="p-4 flex-1 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+            <Sliders className="w-4 h-4 text-blue-500" />
+            2. Simulation Parameters
+          </h2>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !advancedMode;
+              setAdvancedMode(next);
+              localStorage.setItem('wifrost_advanced_mode', String(next));
+            }}
+            className="text-xs text-blue-400 hover:text-blue-300 font-semibold cursor-pointer transition-colors"
+          >
+            {advancedMode ? "Advanced ▴" : "Advanced ▾"}
+          </button>
+        </div>
 
         <div className="space-y-4">
-
 
           {/* Active BTS site */}
           <div className="space-y-1.5">
@@ -429,7 +511,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
               value={selectedBtsIndex}
               onChange={(e) => setSelectedBtsIndex(Number(e.target.value))}
               disabled={btsCandidates.length === 0}
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 disabled:opacity-50"
+              className="w-full px-3 py-2 glass-panel bg-transparent rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 transition-all duration-200"
             >
               {btsCandidates.length === 0 ? (
                 <option value={0}>No BTS candidates found</option>
@@ -446,20 +528,6 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
             </select>
           </div>
 
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => {
-                const next = !advancedMode;
-                setAdvancedMode(next);
-                localStorage.setItem('wifrost_advanced_mode', String(next));
-              }}
-              className="text-xs text-blue-400 hover:text-blue-300 font-medium"
-            >
-              {advancedMode ? "Advanced ▴" : "Advanced ▾"}
-            </button>
-          </div>
-
           {/* RF Parameter Preset (Advanced) */}
           {advancedMode && (
             <div className="space-y-1.5">
@@ -470,7 +538,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
               <select
                 value={rfPreset}
                 onChange={(e) => applyRfPreset(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+                className="w-full glass-panel bg-transparent rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-all duration-200"
               >
                 <option value="manual">✓ Manual (Custom)</option>
                 <option value="macro_site">Macro Site (High Tower, Long Range)</option>
@@ -485,16 +553,16 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
             <div className="space-y-1.5">
               <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40 flex items-center gap-1.5">
                 Propagation Model
-                <Tooltip content="Terrain-Aware: Okumura-Hata propagation calculated over real elevation data from SRTM. Flat Hata: Standard Hata formula assuming a flat plain." />
+                <Tooltip content="Terrain-Aware: Longley-Rice (ITM) propagation calculated over real elevation data from SRTM. Flat Terrain: Standard Longley-Rice assuming a flat plain." />
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="flex glass-panel rounded-xl p-0.5 gap-0.5">
                 <button
                   type="button"
                   onClick={() => setModelType("terrain_aware")}
-                  className={`py-2 text-xs font-medium rounded-lg border transition ${
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 cursor-pointer ${
                     modelType === "terrain_aware"
-                      ? "bg-blue-600/10 border-blue-500 text-blue-400 font-semibold"
-                      : "bg-slate-950/40 border-slate-850 text-slate-400 hover:text-slate-200"
+                      ? "bg-white/10 text-white shadow-sm"
+                      : "text-white/40 hover:text-white/70"
                   }`}
                 >
                   Terrain-Aware
@@ -502,52 +570,62 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                 <button
                   type="button"
                   onClick={() => setModelType("flat")}
-                  className={`py-2 text-xs font-medium rounded-lg border transition ${
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 cursor-pointer ${
                     modelType === "flat"
-                      ? "bg-blue-600/10 border-blue-500 text-blue-400 font-semibold"
-                      : "bg-slate-950/40 border-slate-850 text-slate-400 hover:text-slate-200"
+                      ? "bg-white/10 text-white shadow-sm"
+                      : "text-white/40 hover:text-white/70"
                   }`}
                 >
-                  Flat Hata
+                  Flat Terrain
                 </button>
               </div>
             </div>
           )}
 
           {/* Clutter Environment */}
-          {advancedMode && (
-            <div className="space-y-1.5">
-              <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40 flex items-center gap-1.5">
-                Clutter Environment
-                <Tooltip content="Auto derives the environment from ESA WorldCover land cover for the area — recommended, avoids biasing results with a wrong manual pick. Per-pixel clutter is always applied from land cover when available; this setting controls the Hata correction type. Manual: Open (3 dB), Open Water (0 dB), Suburban (8 dB), Light Vegetation (6 dB), Dense Vegetation (15 dB), Port/Industrial (12 dB), Urban (18 dB)." />
-              </label>
-              <select
-                value={environment}
-                onChange={(e) => {
-                  setEnvironment(e.target.value);
-                  setRfPreset("manual");
-                }}
-                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
-              >
-                <option value="auto">Auto (from land cover) — recommended</option>
-                <option value="open">Open / Rural Flat</option>
-                <option value="open_water">Open Water / Sea</option>
-                <option value="suburban">Suburban / Trees & Houses</option>
-                <option value="vegetation_light">Light Vegetation / Forest Edge</option>
-                <option value="vegetation_dense">Dense Vegetation / Deep Jungle</option>
-                <option value="port_industrial">Port / Industrial</option>
-                <option value="urban">Urban / Tall Structures</option>
-              </select>
-              {environment === "auto" && (
-                <p className="text-[9px] text-slate-600">
-                  The model picks the dominant land-cover environment for the area at run time.
-                </p>
-              )}
+          <div className="space-y-1.5">
+            <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40 flex items-center gap-1.5">
+              Clutter Environment
+              <Tooltip content="Auto derives the environment from ESA WorldCover land cover for the area — recommended, avoids biasing results with a wrong manual pick. Per-pixel clutter is always applied from land cover when available; this setting controls the baseline parameters. Manual: Open (3 dB), Open Water (0 dB), Suburban (8 dB), Light Vegetation (6 dB), Dense Vegetation (15 dB), Port/Industrial (12 dB), Urban (8 dB)." />
+            </label>
+            <select
+              value={environment}
+              onChange={(e) => {
+                setEnvironment(e.target.value);
+                setRfPreset("manual");
+              }}
+              className="w-full px-3 py-2 glass-panel bg-transparent rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 transition-all duration-200"
+            >
+              <option value="auto">Auto (from land cover) — recommended</option>
+              <option value="open">Open / Rural Flat</option>
+              <option value="open_water">Open Water / Sea</option>
+              <option value="suburban">Suburban / Trees & Houses</option>
+              <option value="vegetation_light">Light Vegetation / Forest Edge</option>
+              <option value="vegetation_dense">Dense Vegetation / Deep Jungle</option>
+              <option value="port_industrial">Port / Industrial</option>
+              <option value="urban">Urban / Tall Structures</option>
+            </select>
+            {environment === "auto" && (
+              <p className="text-[9px] text-slate-400 italic">
+                The model picks the dominant land-cover environment for the area at run time.
+              </p>
+            )}
+          </div>
+
+          {/* Terrain Status Badge */}
+          {terrainLoaded !== null && terrainLoaded !== undefined && (
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${
+              terrainLoaded
+                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_8px_rgba(16,185,129,0.1)]"
+                : "bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-[0_0_8px_rgba(245,158,11,0.1)]"
+            }`}>
+              <span>{terrainLoaded ? "🏔️" : "⚠️"}</span>
+              <span className="truncate">{terrainLoaded ? "Real SRTM terrain loaded" : "Flat terrain fallback"}</span>
             </div>
           )}
 
           {/* Frequency & Heights */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40 flex items-center gap-1.5">
                 Frequency (MHz)
@@ -562,7 +640,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                 }}
                 min={470}
                 max={670}
-                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 glass-panel bg-transparent rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 transition-all duration-200"
               />
             </div>
             <div className="space-y-1.5">
@@ -577,22 +655,22 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                   setBtsHeight(Number(e.target.value));
                   setRfPreset("manual");
                 }}
-                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 glass-panel bg-transparent rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 transition-all duration-200"
               />
             </div>
           </div>
 
           {/* Transmitter Power specs */}
           {advancedMode && (
-            <details className="group border border-white/10 rounded-xl bg-white/[0.02] overflow-hidden">
-              <summary className="px-3 py-2 text-[10px] uppercase tracking-widest font-semibold text-white/40 cursor-pointer flex justify-between items-center hover:bg-slate-950/40 transition">
+            <details className="group border border-white/10 rounded-2xl bg-white/[0.02] overflow-hidden transition-all duration-200">
+              <summary className="px-4 py-3 text-[10px] uppercase tracking-widest font-semibold text-white/40 cursor-pointer flex justify-between items-center hover:bg-white/5 transition duration-200">
                 <span>BTS Equipment Config</span>
-                <Settings className="w-3.5 h-3.5 text-slate-500 group-open:rotate-90 transition duration-300" />
+                <Settings className="w-3.5 h-3.5 text-slate-400 group-open:rotate-90 transition duration-300" />
               </summary>
-              <div className="p-3 border-t border-slate-850 space-y-3 bg-slate-950/10">
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase">Power (dBm)</label>
+              <div className="p-3 border-t border-white/5 space-y-3 bg-black/25">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-semibold uppercase tracking-wider text-white/40">Power (dBm)</label>
                     <input
                       type="number"
                       value={txPowerDbm}
@@ -600,11 +678,11 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                         setTxPowerDbm(Number(e.target.value));
                         setRfPreset("manual");
                       }}
-                      className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
+                      className="w-full px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase">Gain (dBi)</label>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-semibold uppercase tracking-wider text-white/40">Gain (dBi)</label>
                     <input
                       type="number"
                       value={antennaGainDbi}
@@ -612,11 +690,11 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                         setAntennaGainDbi(Number(e.target.value));
                         setRfPreset("manual");
                       }}
-                      className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
+                      className="w-full px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase">Loss (dB)</label>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-semibold uppercase tracking-wider text-white/40">Loss (dB)</label>
                     <input
                       type="number"
                       value={cableLossDb}
@@ -624,11 +702,11 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                         setCableLossDb(Number(e.target.value));
                         setRfPreset("manual");
                       }}
-                      className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
+                      className="w-full px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                     />
                   </div>
                 </div>
-                <div className="text-[10px] text-slate-400 text-right">
+                <div className="text-[10px] text-slate-400 text-right font-medium">
                   Calculated EIRP: <span className="text-blue-400 font-bold">{eirpDbm.toFixed(1)} dBm</span>
                 </div>
               </div>
@@ -636,8 +714,8 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           )}
 
           {/* ── ANTENNA SECTORS ─────────────────────────────── */}
-          <div className="border border-slate-700 rounded-lg bg-slate-950/20 overflow-hidden">
-            <div className="px-3 py-2 border-b border-white/5 flex items-center gap-2">
+          <div className="border border-white/10 rounded-2xl bg-white/[0.02] overflow-hidden">
+            <div className="px-4 py-3 border-b border-white/5 flex items-center gap-2">
               <Compass className="w-3.5 h-3.5 text-blue-400" />
               <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Antenna Sectors</span>
             </div>
@@ -645,17 +723,17 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
 
               {/* Sector count selector */}
               <div className="space-y-1.5">
-                <label className="text-[10px] text-slate-500 uppercase">Number of sectors</label>
-                <div className="grid grid-cols-3 gap-1">
+                <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Number of sectors</label>
+                <div className="flex glass-panel rounded-xl p-0.5 gap-0.5">
                   {([1, 2, 3] as const).map((n) => (
                     <button
                       key={n}
                       type="button"
                       onClick={() => handleSectorCountChange(n)}
-                      className={`py-1.5 text-xs font-semibold rounded-md border transition ${
+                      className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 cursor-pointer ${
                         sectorCount === n
-                          ? "bg-blue-600/20 border-blue-500 text-blue-300"
-                          : "bg-slate-950/40 border-slate-800 text-slate-400 hover:text-slate-200"
+                          ? "bg-white/10 text-white shadow-sm"
+                          : "text-white/40 hover:text-white/70"
                       }`}
                     >
                       {n}
@@ -678,11 +756,11 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
               </div>
 
               {/* Azimuth inputs */}
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {sectorAzimuths.slice(0, sectorCount).map((az, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: SECTOR_COLORS[i] }} />
-                    <label className="text-[10px] text-slate-400 w-16 flex-shrink-0">
+                    <label className="text-xs text-slate-300 w-20 flex-shrink-0 font-medium">
                       {sectorCount === 1 ? "Azimuth" : `Sector ${i + 1}`}
                     </label>
                     <input
@@ -691,13 +769,13 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                       max={359}
                       value={az}
                       onChange={(e) => handleAzimuthChange(i, Number(e.target.value))}
-                      className="w-16 px-2 py-1 bg-slate-950 border border-slate-800 rounded text-xs text-white text-right"
+                      className="w-20 px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white text-right focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                     />
-                    <span className="text-[10px] text-slate-500">°</span>
+                    <span className="text-xs text-slate-400">°</span>
                   </div>
                 ))}
                 {sectorCount === 1 && (
-                  <p className="text-[10px] text-slate-600 leading-tight">
+                  <p className="text-[9px] text-slate-400 italic leading-tight">
                     0° = North · 90° = East · 180° = South · 270° = West
                   </p>
                 )}
@@ -705,21 +783,21 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                   <button
                     type="button"
                     onClick={autoSpaceFrom0}
-                    className="w-full py-1.5 text-[10px] text-slate-400 border border-slate-800 rounded-lg hover:text-slate-200 hover:border-slate-600 transition"
+                    className="w-full py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400 glass-panel bg-transparent rounded-xl hover:text-white hover:bg-white/10 transition-all cursor-pointer"
                   >
                     ↺ Equal spacing from Sector 1
                   </button>
                 )}
               </div>
 
-              {/* Antenna pattern — collapsed by default */}
-              <details className="group">
-                <summary className="text-[10px] text-slate-500 uppercase cursor-pointer hover:text-slate-300 transition flex items-center gap-1">
-                  <span className="group-open:rotate-90 inline-block transition-transform">▶</span>
-                  Antenna Pattern
+              {/* Antenna pattern */}
+              <details className="group border border-white/10 rounded-2xl bg-white/[0.02] overflow-hidden transition-all duration-200">
+                <summary className="px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-white/40 cursor-pointer flex justify-between items-center hover:bg-white/5 transition duration-200">
+                  <span>Antenna Pattern Details</span>
+                  <span className="group-open:rotate-90 transition-transform duration-200 text-slate-400">▶</span>
                 </summary>
-                <div className="mt-2 space-y-2 pl-3 border-l border-slate-800">
-                  <p className="text-[9px] text-slate-600">WiFrost panel defaults</p>
+                <div className="p-3 border-t border-white/5 space-y-2.5 bg-black/25">
+                  <p className="text-[9px] text-slate-500 italic">WiFrost panel defaults</p>
                   {[
                     { label: "H-plane HPBW (°)", val: hpbw, set: setHpbw },
                     { label: "V-plane VPBW (°)", val: vpbw, set: setVpbw },
@@ -727,12 +805,12 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                     { label: "Front/Back (dB)",  val: ftb,  set: setFtb  },
                   ].map(({ label, val, set }) => (
                     <div key={label} className="flex items-center justify-between gap-2">
-                      <label className="text-[10px] text-slate-400 flex-1">{label}</label>
+                      <label className="text-[10px] text-slate-300 flex-1 font-medium">{label}</label>
                       <input
                         type="number"
                         value={val}
                         onChange={(e) => set(Number(e.target.value))}
-                        className="w-16 px-2 py-1 bg-slate-950 border border-slate-800 rounded text-xs text-white text-right"
+                        className="w-20 px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white text-right focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                       />
                     </div>
                   ))}
@@ -744,16 +822,16 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
 
           {/* CPE specs */}
           {advancedMode && (
-            <details className="group border border-white/10 rounded-xl bg-white/[0.02] overflow-hidden">
-              <summary className="px-3 py-2 text-[10px] uppercase tracking-widest font-semibold text-white/40 cursor-pointer flex justify-between items-center hover:bg-slate-950/40 transition">
+            <details className="group border border-white/10 rounded-2xl bg-white/[0.02] overflow-hidden transition-all duration-200">
+              <summary className="px-4 py-3 text-[10px] uppercase tracking-widest font-semibold text-white/40 cursor-pointer flex justify-between items-center hover:bg-white/5 transition duration-200">
                 <span>CPE client Config</span>
-                <Settings className="w-3.5 h-3.5 text-slate-500 group-open:rotate-90 transition duration-300" />
+                <Settings className="w-3.5 h-3.5 text-slate-400 group-open:rotate-90 transition duration-300" />
               </summary>
-              <div className="p-3 border-t border-slate-850 space-y-3 bg-slate-950/10">
+              <div className="p-3 border-t border-white/5 space-y-3 bg-black/25">
                 {/* Channel bandwidth → auto-computes Rx sensitivity */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] text-slate-500 uppercase">Channel Bandwidth</label>
-                  <div className="grid grid-cols-4 gap-1">
+                  <label className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Channel Bandwidth</label>
+                  <div className="flex glass-panel rounded-xl p-0.5 gap-0.5">
                     {[6, 12, 18, 24].map((bw) => (
                       <button
                         key={bw}
@@ -762,24 +840,24 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                           setChannelBwMhz(bw);
                           setRfPreset("manual");
                         }}
-                        className={`py-1 text-[10px] font-semibold rounded border transition ${
+                        className={`flex-1 py-1.5 text-[10px] font-semibold rounded-lg transition-all duration-300 cursor-pointer ${
                           channelBwMhz === bw
-                            ? "bg-blue-600/20 border-blue-500 text-blue-300"
-                            : "bg-slate-950/40 border-slate-800 text-slate-400 hover:text-slate-200"
+                            ? "bg-white/10 text-white shadow-sm"
+                            : "text-white/40 hover:text-white/70"
                         }`}
                       >
                         {bw} MHz
                       </button>
                     ))}
                   </div>
-                  <p className="text-[9px] text-slate-600">
+                  <p className="text-[9px] text-slate-400 italic">
                     Computed Rx sensitivity: <span className="text-blue-400 font-semibold">{cpeSensitivity} dBm</span>
                     {" "}· −174 + 10·log₁₀(BW) + {noiseFigureDb} dB NF + {requiredSnrDb} dB SNR
                   </p>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase">CPE Height (m)</label>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-semibold uppercase tracking-wider text-white/40">Height (m)</label>
                     <input
                       type="number"
                       value={cpeHeight}
@@ -787,11 +865,11 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                         setCpeHeight(Number(e.target.value));
                         setRfPreset("manual");
                       }}
-                      className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
+                      className="w-full px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase">Noise Fig (dB)</label>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-semibold uppercase tracking-wider text-white/40">NF (dB)</label>
                     <input
                       type="number"
                       value={noiseFigureDb}
@@ -799,11 +877,11 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                         setNoiseFigureDb(Number(e.target.value));
                         setRfPreset("manual");
                       }}
-                      className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
+                      className="w-full px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase">Req. SNR (dB)</label>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-semibold uppercase tracking-wider text-white/40">Req SNR</label>
                     <input
                       type="number"
                       value={requiredSnrDb}
@@ -811,17 +889,17 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                         setRequiredSnrDb(Number(e.target.value));
                         setRfPreset("manual");
                       }}
-                      className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
+                      className="w-full px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                     />
                   </div>
                 </div>
-                <div className="flex items-center justify-between px-2 py-1.5 bg-slate-950/40 border border-slate-850 rounded">
-                  <span className="text-[10px] text-slate-500 uppercase">Rx Sensitivity</span>
+                <div className="flex items-center justify-between px-3 py-2 glass-panel bg-transparent rounded-xl">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">Rx Sensitivity</span>
                   <span className="text-xs font-bold text-white">{cpeSensitivity} dBm</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase">Ant. Gain (dBi)</label>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-semibold uppercase tracking-wider text-white/40">Ant Gain (dBi)</label>
                     <input
                       type="number"
                       value={cpeGainDbi}
@@ -829,11 +907,11 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                         setCpeGainDbi(Number(e.target.value));
                         setRfPreset("manual");
                       }}
-                      className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
+                      className="w-full px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase">Cable Loss (dB)</label>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-semibold uppercase tracking-wider text-white/40">Cable Loss (dB)</label>
                     <input
                       type="number"
                       value={cpeCableLossDb}
@@ -841,7 +919,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                         setCpeCableLossDb(Number(e.target.value));
                         setRfPreset("manual");
                       }}
-                      className="w-full px-2 py-1 bg-slate-950 border border-slate-850 rounded text-xs text-white"
+                      className="w-full px-2.5 py-1.5 glass-panel bg-transparent rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all duration-200"
                     />
                   </div>
                 </div>
@@ -863,7 +941,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                 setRfPreset("manual");
               }}
               min={0}
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
+              className="w-full px-3 py-2 glass-panel bg-transparent rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 transition-all duration-200"
             />
           </div>
 
@@ -884,7 +962,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
               <select
                 value={coverageProbability}
                 onChange={(e) => setCoverageProbability(e.target.value)}
-                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 glass-panel bg-transparent rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 transition-all duration-200"
               >
                 <option value="50%">50% (Median)</option>
                 <option value="75%">75%</option>
@@ -907,7 +985,7 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
                 placeholder="Uses server defaults if blank"
                 value={srtmKey}
                 onChange={(e) => setSrtmKey(e.target.value)}
-                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 glass-panel bg-transparent rounded-xl text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all duration-200"
               />
             </div>
           )}
@@ -917,11 +995,12 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           </div>
 
           {/* Rerun simulation button */}
-          <div className="p-5 border-t border-slate-800 bg-slate-950/20">
+          <div className="p-4 shrink-0 bg-transparent">
             <button
+              id="simulate-btn"
               onClick={handleSimulateClick}
               disabled={isLoading || parsedSites.length === 0}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-750 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition duration-300 shadow-lg shadow-blue-500/10 border border-blue-500/20 cursor-pointer text-sm"
+              className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-full font-bold flex items-center justify-center gap-2 transition-all duration-300 shadow-[0_0_20px_rgba(79,70,229,0.4)] disabled:shadow-none border border-white/20 cursor-pointer text-[13px] tracking-wide"
             >
               {isLoading ? (
                 <>
@@ -938,6 +1017,8 @@ export default function Sidebar({ onFileParsed, onSimulate, isLoading, parsedSit
           </div>
         </>
       )}
-    </aside>
+        </aside>
+      </div>
+    </div>
   );
 }

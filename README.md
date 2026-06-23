@@ -8,16 +8,32 @@ Built for WiFrost's TVWS deployments in Latin America, but fully general-purpose
 
 ## Features
 
-- **Coverage heatmap** — Okumura-Hata propagation over real SRTM terrain data (or flat-earth mode)
-- **Sector antenna modelling** — 1/2/3 configurable sectors with live compass rose, per-sector azimuth, HPBW, VPBW, and front-to-back ratio
-- **Live sector wedge preview** — dotted sector outlines on the map update instantly as you adjust azimuth (no re-simulation needed)
-- **CPE link budget analysis** — per-client RSSI, margin, path loss, and best-serving sector
-- **Terrain elevation profiles** — Fresnel zone cross-section chart for any BTS→CPE path
-- **Three scenario view** — Best / Realistic / Conservative coverage toggle, map filters in real time
-- **Simulation history** — SQLite-backed run history with reload, compare, and delete
-- **PDF reports** — professional link budget reports with heatmap image and terrain cross-section
-- **AI interpreter** — ask questions in English or Spanish; powered by Google Gemini with keyword fallback
-- **Dark map UI** — Next.js 16 + Tailwind CSS 4 + React-Leaflet on CartoDB Dark Matter tiles
+- **Premium Spatial UI (visionOS style)** — beautiful floating control ornaments, high-performance glassmorphism sidebars, and clean aligned layout.
+- **Pinned Tab Navigation** — Results HUD organized into logical tabs (`Overview`, `Clients`, `Path Link`) to prevent vertical layout clutter and scrolling fatigue.
+- **Dynamic Map Legend** — dynamic horizontal positioning that automatically slides out of the way (`left-[360px]` vs `left-[96px]`) with smooth CSS transitions to prevent parameter panel overlap.
+- **Coverage heatmap** — Okumura-Hata propagation over real SRTM terrain data (or flat-earth mode).
+- **Sector antenna modelling** — 1/2/3 configurable sectors with live compass rose, per-sector azimuth, HPBW, VPBW, and front-to-back ratio.
+- **Live sector wedge preview** — dotted sector outlines on the map update instantly as you adjust azimuth (no re-simulation needed).
+- **CPE link budget analysis** — per-client RSSI, margin, path loss, and best-serving sector.
+- **Terrain elevation profiles** — Fresnel zone cross-section chart for any BTS→CPE path with a modal-maximize overlay.
+- **Three scenario view** — Best / Realistic / Conservative coverage toggle, map filters in real time.
+- **Simulation history** — SQLite-backed run history with reload, compare, and delete.
+- **PDF reports** — professional link budget reports with heatmap image and terrain cross-section.
+- **AI interpreter** — ask questions in English or Spanish; powered by Google Gemini with keyword fallback.
+- **Dark map UI** — Next.js 16 + Tailwind CSS 4 + CartoDB Dark Matter tiles.
+
+---
+
+## UI/UX Vision: Spatial Glass Instrument
+
+We are evolving the frontend into a premium **"spatial glass" dark instrument**, inspired by visionOS frosted floating panels. This design system treats the application as a highly precise, data-dense RF engineering tool while maintaining an Apple-like aesthetic.
+
+- **Design Tokens**: Driven by robust CSS variables (base, accent `#38BDF8`, signal scale, glass fill/blur).
+- **Typography**: `Space Grotesk` for UI elements and `JetBrains Mono` for precise data/metrics.
+- **Theming**: Full support for both `dark` and `light` (`data-theme="light"`) modes, persisted to `localStorage` and honoring `prefers-color-scheme`.
+- **Left Parameter Sidebar**: Collapsible glass modules with segmented selectors, knurled LED slider "dials" for parameters, and a draggable SVG compass rose for sector azimuths.
+- **Right Results HUD**: A tabbed structure (`Overview`, `Clients`, `Path Link`) featuring conic ring coverage gauges, KPI rows, client status cards, and a signed link-budget waterfall with SVG terrain elevation profiles.
+- **Mapping Engine**: Utilizing a React/Next.js + MapLibre ecosystem for high-performance 3D mapping and vector rendering.
 
 ---
 

@@ -35,17 +35,20 @@ See `frontend/.env.example` for the template.
 
 ## Key components
 
-- **`Sidebar`** — file upload, simulation params, antenna sector config (compass rose + azimuth inputs), channel bandwidth selector
-- **`CompassRose`** — draggable SVG sector wedges with live azimuth sync to the map
-- **`MapInner`** — Leaflet map with coverage heatmap overlay, sector wedge polygons, BTS/CPE markers
-- **`CpeTable`** — per-CPE link analysis with Sector column and Gap ⚠ detection
-- **`ResultsBanner`** — simulation outcome summary + PDF report download
+- **`Sidebar`** — file upload, parameters, antenna sector configuration (compass rose + live azimuth sync), and clutter / terrain loaded status indicators.
+- **`CompassRose`** — draggable SVG compass sectors with reactive azimuth angle callbacks.
+- **`MapInner`** — Leaflet overlay mapping with dynamic sliding legend offset, sector wedges, and path-loss heatmaps.
+- **`CpeSummaryBar`** — Pass/marginal/fail client link margin reliability progress indicators.
+- **`CpeTable`** — client link budgets styled as a list of selectable compact cards.
+- **`TerrainChart`** — Fresnel clearance path elevation SVG chart with full-size center modal backdrop overlay.
+- **`LinkBudget`** — transparent FWA path-loss math breakdown.
+- **`ResultsBanner`** — outcome description and base64-compiled ReportLab PDF report generation.
 
-## Building for production (Firebase Hosting)
+## Building for production (Vercel)
 
 ```bash
-npm run build        # outputs to /out (static export)
-firebase deploy --only hosting
+npm run build        # compiles and verifies Next.js application
+npx vercel --prod    # deploys optimized build to Vercel production
 ```
 
-See `DEPLOYMENT.md` at the repo root for the full Cloud Run + Firebase flow.
+See the root **[DEPLOYMENT.md](file:///Users/umairqayyum/Documents/Software/Anti-Gravity/WiFrost%20Propagation/wifrost-coverage-tool/DEPLOYMENT.md)** for full reproduction steps and environment configurations.

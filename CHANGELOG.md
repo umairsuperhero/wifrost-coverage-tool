@@ -1,5 +1,74 @@
 # Changelog
 
+## [Unreleased] — branch `feature/spatial-glass-maplibre` (not yet in production)
+
+> This branch is the new ITM-Longley-Rice UI/backend. It is kept **separate from
+> production (`main`)** until the owner approves a release — see CLAUDE.md
+> "Branch & Deployment Protocol".
+
+### Fixed
+- **Restored `okumura_hata()` in `propagation.py`** so `api.py`, `heatmap.py`,
+  `app.py` and `test_propagation_model.py` import again. Commit `64384ce` removed
+  the function during the Longley-Rice swap but left these callers, so this branch
+  could not boot or deploy (`import api` raised `ImportError`). Verified with the
+  new smoke test. (Phase 0 of the 2026-06-18 review.)
+- **Atomic SRTM cache writes in `terrain.py`.** The shared `cache/*.npy`/`*.meta`
+  files were written in place (`np.save` / `open('w')`), so concurrent requests for
+  the same region could read a half-written array (corruption) or interleave two
+  writers. Writes now go to a temp file in the same directory and are `os.replace()`d
+  into place (atomic on POSIX); the meta is published before the array because the
+  reader checks the `.npy` first. (Finding #4 of the 2026-06-19 audit.)
+- **`api.cpe_analysis` no longer 500s with `NameError: name 'math' is not defined`.**
+  The CPE MDT vertical-angle line (`api.py:635`) called `math` without a module-level
+  `import math`, so every `POST /api/cpe-analysis` failed and the new UI's client
+  link-margin table came back empty. Found by running the feature-branch backend
+  locally end to end — the prod Cloud Run backend serves the older `main` build (no such
+  code), so the bug was invisible against prod. Added `import math` + an offline
+  regression test (`test_cpe_analysis_runs_offline`).
+
+### Added
+- **`test_smoke.py`** — offline import + coverage-grid + cpe-analysis smoke tests that
+  fail fast on the "removed symbol still imported" / "used-but-unimported name" classes
+  of regression. Run before any deploy.
+- **Functional anti-hallucination verification system** (`.claude/`):
+  - `hooks/verify-edit.sh` (PostToolUse): `py_compile` on `.py` writes, `tsc --noEmit`
+    on `.ts/.tsx` writes — fabricated imports/symbols fail immediately.
+  - `hooks/verify-stop.sh` (Stop): runs `test_smoke.py` before a session can end.
+  - Replaces the previously non-functional `settings.json` hooks (the
+    `Write(.ts|.tsx)` matchers never matched a tool name, `$file`/`ruff`/`pyright`
+    were unavailable, and the `Stop` block was nested outside `hooks`).
+- **`docs/code-review-2026-06-18.md`** — full architecture/physics review with a
+  phased action plan (model unification, perf, robustness).
+
+### Performance
+- **`heatmap.py` terrain-aware step now processes the elevation profile in
+  row-blocks** instead of materialising three `(rows, cols, 100)` float64 arrays
+  (plus ~20 same-sized temporaries inside `get_elevation_np`) for the whole grid at
+  once. Peak RAM scaled as `rows*cols*100` — ~2 GB for a 400×400 grid — risking OOM
+  on the 2 GiB Cloud Run instance. Now blocked by a fixed element budget; output
+  verified bit-identical to the single-block result. (Finding #3.)
+- **Removed the dead `hoverPoint` re-render cascade (frontend).** Hovering the terrain
+  profile pushed a geographic point into root state that was threaded into the map but
+  never rendered, forcing a full-app re-render at mouse-move rate for no visual effect.
+  Removed the state and plumbing; the on-chart tooltip (local `hoverIdx`) is unchanged.
+  (Finding #1.)
+
+### Known / deferred
+- **CPE list windowing (Finding #2) — still open.** `CpeTable` renders every filtered
+  CPE card into the DOM; large deployments (thousands of CPEs) bloat it. Two fixes were
+  tried live against the running UI and neither verified in this stack: `react-virtuoso`
+  mounted but rendered **zero** rows despite correct `data`/`itemContent` props (likely a
+  Next 16 / React 19 measurement or StrictMode issue), and `content-visibility: auto` did
+  **not** skip off-screen cards even at 600 items. Only a safe `useMemo` on the filter
+  shipped. Recommend revisiting with `@tanstack/react-virtual` or a production-build
+  retest of Virtuoso.
+
+### Changed
+- **CLAUDE.md deployment rules** rewritten: production (`main`) is frozen during
+  feature work; commit/push to the feature branch only; never auto-push `main` or
+  deploy to production. Documents the Layer-3 hooks and the fact-checker subagent.
+- `.claude/settings.local.json` (personal permission grants) is now git-ignored.
+
 ## [2.1.1] — 2026-06-04
 
 ### Changed

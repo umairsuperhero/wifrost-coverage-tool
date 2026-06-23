@@ -1,4 +1,5 @@
 import math
+import requests
 import numpy as np
 from io import BytesIO
 from PIL import Image, ImageDraw
@@ -11,6 +12,13 @@ from propagation import (terrain_aware_loss, okumura_hata, compute_eirp, compute
                           PathLossResult, ENVIRONMENT_SIGMA, ENVIRONMENT_CLUTTER_LOSS,
                           shadowing_margin, EFFECTIVE_EARTH_RADIUS_KM, DEYGOUT_MAX_LOSS_DB)
 from terrain import TerrainGrid, get_elevation, get_elevation_np
+
+
+# Max number of terrain-profile sample points (rows * cols * 100) materialised at once
+# in the terrain-aware step. get_elevation_np allocates ~20 temporaries of this size, so
+# the full grid would blow past Cloud Run's 2 GiB on large AOIs; we process in row-blocks
+# sized to this budget instead. ~1M points keeps a block's peak well under ~200 MB.
+_PROFILE_BLOCK_ELEMENTS = 1_000_000
 
 
 # ── Data classes ──────────────────────────────────────────────────────────────
@@ -338,32 +346,40 @@ def compute_coverage_grid(bts_site: Any, equipment_bts: Any, equipment_cpe: Any,
     # hill/ridge obstruction. The pure flat model (model != 'terrain_aware') skips
     # this for a quick, horizon-unlimited estimate.
     if model == 'terrain_aware':
-        # Precompute profile coordinates for all cells
-        t_points = np.linspace(0, 1.0, 100) # (100,)
-        
-        # 3D coordinate grids of shape (nrows, ncols, 100)
-        lats_3d = bts_lat + t_points[np.newaxis, np.newaxis, :] * (lats_2d[:, :, np.newaxis] - bts_lat)
-        lons_3d = bts_lon + t_points[np.newaxis, np.newaxis, :] * (lons_2d[:, :, np.newaxis] - bts_lon)
-        
-        # Get elevations for all profile points at once (O(1) database/cache roundtrip)
-        elevations_flat = get_elevation_np(terrain_grid, lats_3d.ravel(), lons_3d.ravel())
-        elevations_3d = elevations_flat.reshape(nrows, ncols, 100)
-
+        t_points = np.linspace(0, 1.0, 100)  # (100,)
         diffraction_array = np.zeros((nrows, ncols))
         rx_asls = rx_grounds + cpe_height
 
-        for r in range(nrows):
-            for c in range(ncols):
-                dist_km = distances_km[r, c]
-                if dist_km <= 0.05:
-                    continue
-                d_arr = dist_km * t_points
-                # Add earth-curvature bulge so beyond-horizon paths are correctly
-                # obstructed (realistic radio horizon) rather than appearing as LoS.
-                bulge = (d_arr * (dist_km - d_arr)) / (2.0 * EFFECTIVE_EARTH_RADIUS_KM) * 1000.0
-                e_arr = elevations_3d[r, c] + bulge
-                diffraction_array[r, c] = deygout_loss_np(d_arr, e_arr, bts_asl, rx_asls[r, c], f_mhz)
-                
+        # Build the (rows, cols, 100) profile coordinates and elevations in row-blocks
+        # instead of all at once. The full grid plus get_elevation_np's internal
+        # temporaries scale as nrows*ncols*100 and would exceed Cloud Run's 2 GiB on
+        # large AOIs; blocking by a fixed element budget bounds peak memory while leaving
+        # the per-cell math identical.
+        rows_per_block = max(1, _PROFILE_BLOCK_ELEMENTS // (ncols * 100))
+        for rb0 in range(0, nrows, rows_per_block):
+            rb1 = min(rb0 + rows_per_block, nrows)
+            block_lats = lats_2d[rb0:rb1]  # (rb, ncols)
+            block_lons = lons_2d[rb0:rb1]
+
+            # 3D coordinate grids of shape (rb, ncols, 100) for this block of rows
+            lats_3d = bts_lat + t_points[np.newaxis, np.newaxis, :] * (block_lats[:, :, np.newaxis] - bts_lat)
+            lons_3d = bts_lon + t_points[np.newaxis, np.newaxis, :] * (block_lons[:, :, np.newaxis] - bts_lon)
+            elevations_3d = get_elevation_np(
+                terrain_grid, lats_3d.ravel(), lons_3d.ravel()
+            ).reshape(rb1 - rb0, ncols, 100)
+
+            for r in range(rb0, rb1):
+                for c in range(ncols):
+                    dist_km = distances_km[r, c]
+                    if dist_km <= 0.05:
+                        continue
+                    d_arr = dist_km * t_points
+                    # Add earth-curvature bulge so beyond-horizon paths are correctly
+                    # obstructed (realistic radio horizon) rather than appearing as LoS.
+                    bulge = (d_arr * (dist_km - d_arr)) / (2.0 * EFFECTIVE_EARTH_RADIUS_KM) * 1000.0
+                    e_arr = elevations_3d[r - rb0, c] + bulge
+                    diffraction_array[r, c] = deygout_loss_np(d_arr, e_arr, bts_asl, rx_asls[r, c], f_mhz)
+
         loss_array += diffraction_array
 
     # Sector Gain
@@ -676,63 +692,123 @@ def coverage_to_geojson(coverage_grid: CoverageGrid,
 
 # ── PNG image for PDF ─────────────────────────────────────────────────────────
 
+def deg2num(lat_deg, lon_deg, zoom):
+    lat_rad = math.radians(lat_deg)
+    n = 2.0 ** zoom
+    xtile = int((lon_deg + 180.0) / 360.0 * n)
+    ytile = int((1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n)
+    return (xtile, ytile)
+
+def fetch_basemap_image(north, south, east, west, width_px, height_px):
+    zoom = 13
+    x_min, y_min = deg2num(north, west, zoom)
+    x_max, y_max = deg2num(south, east, zoom)
+    
+    if x_min > x_max: x_min, x_max = x_max, x_min
+    if y_min > y_max: y_min, y_max = y_max, y_min
+
+    tiles = {}
+    for x in range(x_min, x_max + 1):
+        for y in range(y_min, y_max + 1):
+            url = f"https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{zoom}/{y}/{x}"
+            try:
+                headers = {'User-Agent': 'WiFrost-Coverage-Tool/1.0'}
+                resp = requests.get(url, headers=headers, timeout=5)
+                resp.raise_for_status()
+                tiles[(x, y)] = Image.open(BytesIO(resp.content)).convert("RGBA")
+            except Exception:
+                tiles[(x, y)] = Image.new("RGBA", (256, 256), (245, 246, 250, 255))
+    
+    stitched = Image.new("RGBA", ((x_max - x_min + 1) * 256, (y_max - y_min + 1) * 256))
+    for (x, y), tile in tiles.items():
+        stitched.paste(tile, ((x - x_min) * 256, (y - y_min) * 256))
+        
+    def latlon_to_pixel(lat, lon):
+        lat_rad = math.radians(lat)
+        n = 2.0 ** zoom
+        px = ((lon + 180.0) / 360.0 * n) * 256.0
+        py = ((1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n) * 256.0
+        return px, py
+        
+    px_west, py_north = latlon_to_pixel(north, west)
+    px_east, py_south = latlon_to_pixel(south, east)
+    
+    offset_x = x_min * 256
+    offset_y = y_min * 256
+    
+    crop_left = px_west - offset_x
+    crop_top = py_north - offset_y
+    crop_right = px_east - offset_x
+    crop_bottom = py_south - offset_y
+    
+    cropped = stitched.crop((crop_left, crop_top, crop_right, crop_bottom))
+    return cropped.resize((width_px, height_px), Image.Resampling.LANCZOS)
+
 def coverage_to_image(coverage_grid: CoverageGrid) -> bytes:
-    """Render RSSI grid as a PNG with coordinate labels for PDF embedding."""
+    """Render RSSI grid as a PNG composited over a geographical basemap for PDF embedding."""
     rssi_array = coverage_grid.rssi_array
     nrows, ncols = rssi_array.shape
+    lats = coverage_grid.lats
+    lons = coverage_grid.lons
 
-    # Colour map
-    COLOR_ABOVE = (245, 246, 250)   # below threshold — light grey background
-    grid_img = Image.new('RGB', (ncols, nrows), color=COLOR_ABOVE)
-    pixels = grid_img.load()
+    new_w = max(480, ncols * 4)
+    new_h = max(480, nrows * 4)
+
+    # 1. Fetch basemap
+    base_img = Image.new('RGB', (new_w, new_h), color=(245, 246, 250))
+    if len(lats) > 0 and len(lons) > 0:
+        north = float(np.max(lats))
+        south = float(np.min(lats))
+        east = float(np.max(lons))
+        west = float(np.min(lons))
+        try:
+            carto_map = fetch_basemap_image(north, south, east, west, new_w, new_h)
+            base_img = carto_map.convert("RGB")
+        except Exception as e:
+            print("Failed to fetch basemap:", e)
+
+    # 2. Draw heatmap overlay
+    heatmap_img = Image.new('RGBA', (ncols, nrows), color=(0, 0, 0, 0))
+    pixels = heatmap_img.load()
     for r in range(nrows):
         for c in range(ncols):
             rssi = rssi_array[r, c]
             if rssi >= -65.0:
-                pixels[c, r] = (46, 204, 113)
+                pixels[c, r] = (46, 204, 113, 160)
             elif rssi >= -75.0:
-                pixels[c, r] = (39, 174, 96)
+                pixels[c, r] = (39, 174, 96, 160)
             elif rssi >= -85.0:
-                pixels[c, r] = (241, 196, 15)
+                pixels[c, r] = (241, 196, 15, 160)
 
-    # Scale up for legibility in PDF
-    new_w = max(480, ncols * 4)
-    new_h = max(480, nrows * 4)
-    img = grid_img.resize((new_w, new_h), Image.Resampling.NEAREST)
+    heatmap_resized = heatmap_img.resize((new_w, new_h), Image.Resampling.NEAREST)
+    base_img.paste(heatmap_resized, (0, 0), heatmap_resized)
 
-    draw = ImageDraw.Draw(img)
-
-    # Border
+    # 3. Add borders and annotations
+    draw = ImageDraw.Draw(base_img)
     draw.rectangle([0, 0, new_w - 1, new_h - 1], outline=(80, 80, 80), width=2)
 
-    # Coordinate labels at corners (lat/lon from grid)
-    lats = coverage_grid.lats
-    lons = coverage_grid.lons
     if len(lats) > 0 and len(lons) > 0:
-        lat_n = f"{lats[0]:.4f}°N"
-        lat_s = f"{lats[-1]:.4f}°N"
-        lon_w = f"{lons[0]:.4f}°W" if lons[0] < 0 else f"{lons[0]:.4f}°E"
-        lon_e = f"{lons[-1]:.4f}°W" if lons[-1] < 0 else f"{lons[-1]:.4f}°E"
+        lat_n = f"{north:.4f}°N"
+        lat_s = f"{south:.4f}°N"
+        lon_w = f"{west:.4f}°W" if west < 0 else f"{west:.4f}°E"
+        lon_e = f"{east:.4f}°W" if east < 0 else f"{east:.4f}°E"
 
         label_color = (60, 60, 60)
         pad = 6
-        # Top-left
         draw.text((pad, pad), f"{lat_n}  {lon_w}", fill=label_color)
-        # Top-right
         tr_text = f"{lat_n}  {lon_e}"
         draw.text((new_w - len(tr_text) * 6 - pad, pad), tr_text, fill=label_color)
-        # Bottom-left
         draw.text((pad, new_h - 16), f"{lat_s}  {lon_w}", fill=label_color)
-        # Center top — schematic note
-        note = "RF Coverage Model — schematic (no basemap)"
-        draw.text((new_w // 2 - len(note) * 3, new_h - 16), note, fill=(120, 120, 120))
+        
+        note = "RF Coverage Model with CartoDB Basemap"
+        draw.text((new_w // 2 - len(note) * 3, new_h - 16), note, fill=(40, 40, 40))
 
-    # North arrow (top-right corner)
+    # North arrow
     ax, ay = new_w - 30, 30
     draw.line([(ax, ay + 20), (ax, ay - 5)], fill=(40, 40, 40), width=2)
     draw.polygon([(ax - 5, ay), (ax + 5, ay), (ax, ay - 12)], fill=(40, 40, 40))
     draw.text((ax - 4, ay + 22), "N", fill=(40, 40, 40))
 
     buf = BytesIO()
-    img.save(buf, format='PNG')
+    base_img.save(buf, format='PNG')
     return buf.getvalue()

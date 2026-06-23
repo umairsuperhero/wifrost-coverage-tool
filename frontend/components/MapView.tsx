@@ -31,13 +31,13 @@ interface MapViewProps {
   onAddCpe?: (lat: number, lng: number) => void;
   mapMode?: "normal" | "measure" | "addcpe";
   setMapMode?: (mode: "normal" | "measure" | "addcpe") => void;
-  hoverPoint?: [number, number] | null;
   opacity?: number;
   setOpacity?: (opacity: number) => void;
   mapTheme?: "dark" | "satellite" | "street";
   setMapTheme?: (theme: "dark" | "satellite" | "street") => void;
   measurePoints?: [number, number][];
   setMeasurePoints?: (points: [number, number][]) => void;
+  isSidebarExpanded?: boolean;
 }
 
 export default function MapView(props: MapViewProps) {

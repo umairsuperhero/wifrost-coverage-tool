@@ -29,7 +29,7 @@ WORLDCOVER_CLUTTER_DB: Dict[int, float] = {
     20: 8.0,    # Shrubland
     30: 4.0,    # Grassland
     40: 5.0,    # Cropland
-    50: 18.0,   # Built-up
+    50: 8.0,    # Built-up (reduced from 18: Hata urban model already penalizes)
     60: 2.0,    # Bare / sparse vegetation
     70: 1.0,    # Snow and ice
     80: 0.0,    # Permanent water bodies

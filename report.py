@@ -121,7 +121,7 @@ def _draw_chrome(canvas, doc):
     canvas.setFont('Helvetica', 7)
     canvas.setFillColor(C_SLATE)
     canvas.drawString(36, 32,
-        "Model: Okumura-Hata + SRTM terrain + Deygout diffraction + WorldCover clutter. "
+        "Model: Longley-Rice (ITM) + SRTM terrain + Deygout diffraction + WorldCover clutter. "
         "Pre-sales planning only — field validation recommended. See Methodology page.")
 
     canvas.restoreState()
@@ -808,11 +808,12 @@ def generate_pdf_report(
         story.append(Paragraph(body, _s('MmB', 8.5, C_DARK, leading=13)))
         story.append(Spacer(1, 7))
 
-    _method("1 · Base path loss — Okumura-Hata (UHF 150–1500 MHz)",
-            "An empirical model tuned for the UHF TV bands. The effective base-station height is taken "
-            "above the receiver's ground elevation (clamped to the model's valid 10–200 m range) and the "
-            "open-area correction is capped at 20 dB. Over open water the model switches to a two-ray "
-            "ground-reflection calculation, which better represents long over-water links.")
+    _method("1 · Base path loss — Longley-Rice ITM (Irregular Terrain Model)",
+            "The industry standard for terrain-aware propagation. Computes physics over the actual "
+            "path between transmitter and receiver, accounting for atmospheric refraction, "
+            "ground conductivity, and dielectric constants. It is superior to empirical models "
+            "for complex landscapes, especially in TVWS frequencies where signal propagation "
+            "is highly dependent on the terrain profile.")
 
     _method("2 · Terrain &amp; radio horizon — SRTM 30 m + Deygout diffraction",
             "The ground profile between transmitter and receiver is sampled from 30 m SRTM elevation data. "
@@ -824,8 +825,7 @@ def generate_pdf_report(
     _method("3 · Land-cover clutter — ESA WorldCover 10 m",
             "Excess loss from ground cover is read per-pixel from ESA WorldCover 2021 (10 m) and applied at "
             "the receiver location — e.g. tree cover ≈ 14 dB, mangroves ≈ 12 dB, built-up ≈ 18 dB, open ground "
-            "≈ 2–4 dB, water 0 dB. The 'Auto' environment also derives the Hata correction (open / suburban / "
-            "urban / vegetation) from the dominant land cover, so results are not biased by a manual guess.")
+            "≈ 2–4 dB, water 0 dB. This prevents double-penalizing the terrain diffraction that ITM calculates.")
 
     _method("4 · Antenna pattern",
             "Each sector applies a directional gain pattern (parabolic main lobe with a front-to-back floor) "

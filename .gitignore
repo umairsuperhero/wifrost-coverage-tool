@@ -19,5 +19,9 @@ data/
 simulations/
 scratch/
 
+# Claude Code — personal/machine-specific permission grants (keep local)
+.claude/settings.local.json
+
 # OS
 .DS_Store
+.vercel

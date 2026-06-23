@@ -1,5 +1,6 @@
 import React from "react";
 import { Signal, CheckCircle2, ShieldCheck } from "lucide-react";
+import { cn } from "../lib/utils";
 
 interface ScenarioStats {
   coverage_pct: number;
@@ -42,97 +43,94 @@ const SCENARIO_META = {
 } as const;
 
 export default function MetricsRow({ threeScenarios, activeScenarioName, onScenarioChange }: MetricsRowProps) {
-  const getBorderColor = (key: string) => {
-    if (key === activeScenarioName) {
-      return "border-blue-500 bg-blue-500/5 ring-1 ring-blue-500/30";
-    }
-    return "border-slate-800 bg-slate-900/40";
-  };
+  const activeScenario = threeScenarios[activeScenarioName];
+  const activeMeta = SCENARIO_META[activeScenarioName];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      {(["best", "realistic", "conservative"] as const).map((key) => {
-        const scenario = threeScenarios[key];
-        const meta = SCENARIO_META[key];
-        const isActive = key === activeScenarioName;
+    <div className="space-y-3">
+      {/* Scenario Segmented Toggler */}
+      <div className="flex glass-panel rounded-xl p-0.5 gap-0.5">
+        {(["best", "realistic", "conservative"] as const).map((key) => {
+          const isActive = key === activeScenarioName;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onScenarioChange?.(key)}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all duration-300 cursor-pointer text-center ${
+                isActive
+                  ? "bg-white/10 text-white shadow-sm"
+                  : "text-white/40 hover:text-white/70"
+              }`}
+            >
+              {SCENARIO_META[key].label}
+            </button>
+          );
+        })}
+      </div>
 
-        return (
-          <div
-            key={key}
-            onClick={() => onScenarioChange?.(key)}
-            className={`p-5 rounded-xl border transition-all duration-300 relative flex flex-col justify-between cursor-pointer ${getBorderColor(
-              key
-            )} ${!isActive ? "hover:border-slate-700 hover:bg-slate-900/60" : ""}`}
-          >
-            {isActive && (
-              <span className="absolute top-3 right-3 text-xs bg-blue-600/20 border border-blue-500/30 text-blue-400 px-2 py-0.5 rounded-full font-medium">
-                Active View
-              </span>
-            )}
-
-            <div>
-              <div className="flex items-baseline gap-2">
-                <h4 className="text-sm font-semibold text-white">{meta.label}</h4>
-                {typeof scenario.margin_db === "number" && (
-                  <span className="text-xs text-slate-500">
-                    {scenario.margin_db.toFixed(0)} dB margin
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">{meta.sub}</p>
-
-              <div className="mt-4 space-y-4">
-                {/* Reliable coverage */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-slate-300">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span className="text-sm">Reliable area</span>
-                  </div>
-                  <span className="text-lg font-bold text-white">
-                    {scenario.coverage_pct}%
-                  </span>
-                </div>
-
-                {/* Strong signal */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-slate-300">
-                    <Signal className="w-4 h-4 text-blue-400" />
-                    <span className="text-sm">Strong signal</span>
-                  </div>
-                  <span className="text-lg font-bold text-white">
-                    {scenario.good_pct}%
-                  </span>
-                </div>
-
-                {/* Confidence margin */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-slate-300">
-                    <ShieldCheck className="w-4 h-4 text-indigo-400" />
-                    <span className="text-sm">Link margin</span>
-                  </div>
-                  <span className="text-lg font-bold text-white">
-                    {typeof scenario.margin_db === "number" ? `${scenario.margin_db.toFixed(0)} dB` : "—"}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick status bar — reliable area */}
-            <div className="w-full bg-slate-800 rounded-full h-1.5 mt-5 overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  scenario.coverage_pct >= 85
-                    ? "bg-emerald-500"
-                    : scenario.coverage_pct >= 60
-                    ? "bg-amber-500"
-                    : "bg-red-500"
-                }`}
-                style={{ width: `${scenario.coverage_pct}%` }}
-              />
-            </div>
+      {/* Active Scenario Card */}
+      <div className="glass-panel rounded-2xl p-4 space-y-3">
+        <div className="flex justify-between items-start">
+          <div>
+            <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+              {activeMeta.label} View
+              {typeof activeScenario.margin_db === "number" && (
+                <span className="text-[10px] text-slate-500 font-medium tracking-normal">
+                  ({activeScenario.margin_db.toFixed(0)} dB margin)
+                </span>
+              )}
+            </h4>
+            <p className="text-xs text-slate-400 mt-0.5">{activeMeta.sub}</p>
           </div>
-        );
-      })}
+          <span className="text-3xl font-extrabold text-white tracking-tight font-mono">
+            {activeScenario.coverage_pct}%
+          </span>
+        </div>
+
+        {/* Modern progress bar indicator */}
+        <div className="w-full bg-white/5 rounded-full h-2 overflow-hidden border border-white/5">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              activeScenario.coverage_pct >= 85
+                ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]"
+                : activeScenario.coverage_pct >= 60
+                ? "bg-gradient-to-r from-amber-500 to-yellow-400 shadow-[0_0_8px_rgba(245,158,11,0.5)]"
+                : "bg-gradient-to-r from-red-500 to-rose-400 shadow-[0_0_8px_rgba(239,68,68,0.5)]"
+            }`}
+            style={{ width: `${activeScenario.coverage_pct}%` }}
+          />
+        </div>
+
+        {/* Detailed stats list */}
+        <div className="space-y-3 pt-2 border-t border-white/5">
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2 text-slate-300">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span>Reliable Area Coverage</span>
+            </div>
+            <span className="font-semibold text-white font-mono">{activeScenario.coverage_pct}%</span>
+          </div>
+
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2 text-slate-300">
+              <Signal className="w-4 h-4 text-blue-400" />
+              <span>Strong Signal Coverage</span>
+            </div>
+            <span className="font-semibold text-white font-mono">{activeScenario.good_pct}%</span>
+          </div>
+
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2 text-slate-300">
+              <ShieldCheck className="w-4 h-4 text-indigo-400" />
+              <span>Safety Link Margin</span>
+            </div>
+            <span className="font-semibold text-white font-mono">
+              {typeof activeScenario.margin_db === "number" ? `${activeScenario.margin_db.toFixed(0)} dB` : "—"}
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

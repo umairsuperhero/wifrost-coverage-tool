@@ -9,6 +9,7 @@ numpy==1.26.4
 pandas==2.2.3
 openpyxl==3.1.5
 requests==2.32.5
+itmlogic==1.2
 python-dotenv==1.2.1
 google-generativeai==0.8.6
 reportlab==4.5.1

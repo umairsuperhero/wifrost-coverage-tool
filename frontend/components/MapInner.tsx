@@ -1,31 +1,29 @@
 "use client";
 
-import React, { useEffect } from "react";
-import { MapContainer, TileLayer, Marker, Popup, GeoJSON, Polygon, Polyline, CircleMarker, Tooltip, useMap, useMapEvents } from "react-leaflet";
-import L from "leaflet";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import Map, { Source, Layer, Marker, Popup, NavigationControl, ScaleControl, MapRef } from "react-map-gl/maplibre";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { MousePointer, Ruler, MapPin } from "lucide-react";
+import * as turf from "@turf/turf";
 
-// Custom Leaflet CSS DivIcons to enable modern styling
-const getBtsIcon = (isActive: boolean) => {
-  return L.divIcon({
-    html: `<div class="relative flex items-center justify-center">
-      ${isActive ? '<span class="absolute w-10 h-10 rounded-full bg-amber-500/30 animate-ping"></span>' : ""}
-      <div class="w-6 h-6 rounded-full ${
-        isActive ? "bg-amber-500 border-2 border-white" : "bg-slate-700 border border-slate-500"
-      } flex items-center justify-center shadow-xl">
-        <div class="w-2.5 h-2.5 rounded-full bg-slate-950"></div>
-      </div>
-    </div>`,
-    className: "custom-bts-icon",
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
-    popupAnchor: [0, -10],
-  });
-};
+// Helper to generate a GeoJSON polygon for a sector wedge
+function generateSectorGeoJSON(btsLat: number, btsLon: number, azimuth: number, hpbw: number, radiusKm: number) {
+  const points: [number, number][] = [[btsLon, btsLat]]; // turf uses [lon, lat]
+  const startAngle = azimuth - hpbw / 2;
+  const endAngle = azimuth + hpbw / 2;
+  const numPts = 30;
 
-// Colour a CPE by its link tier (0 no-link → 3 excellent), the SAME
-// classification the heatmap cells use, so a green dot always sits on a
-// green cell. Falls back to head-room margin for older backend responses.
+  for (let i = 0; i <= numPts; i++) {
+    const angle = startAngle + (i / numPts) * (endAngle - startAngle);
+    // standard bearing is clockwise from North. turf.destination takes bearing in degrees (-180 to 180 or 0 to 360)
+    const pt = turf.destination([btsLon, btsLat], radiusKm, angle, { units: "kilometers" });
+    points.push(pt.geometry.coordinates as [number, number]);
+  }
+  points.push([btsLon, btsLat]);
+  
+  return turf.polygon([points]);
+}
+
 const TIER_HEX = ["#EF4444", "#F59E0B", "#22C55E", "#16A34A"];
 const getCpeColor = (cpe: { tier?: number; margin_db: number }): string => {
   if (typeof cpe.tier === "number") return TIER_HEX[cpe.tier] ?? "#EF4444";
@@ -35,73 +33,7 @@ const getCpeColor = (cpe: { tier?: number; margin_db: number }): string => {
   return "#EF4444";
 };
 
-const getCpeIcon = (status: string, isSelected: boolean) => {
-  let color = "#EF4444"; // red (fail)
-  if (status.includes("Excellent") || status.includes("🟢")) color = "#10B981"; // emerald
-  else if (status.includes("Marginal") || status.includes("🟡") || status.includes("Pass")) color = "#F59E0B"; // amber
-
-  return L.divIcon({
-    html: `<div class="relative flex items-center justify-center">
-      ${isSelected ? '<span class="absolute w-8 h-8 rounded-full bg-blue-500/40 animate-ping"></span>' : ""}
-      <div class="w-4 h-4 rounded-full border border-white flex items-center justify-center shadow-lg transition-transform duration-300 ${
-        isSelected ? "scale-125 border-2" : ""
-      }" style="background-color: ${color};">
-      </div>
-    </div>`,
-    className: "custom-cpe-icon",
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -10],
-  });
-};
-
-const getStartPinIcon = () => L.divIcon({
-  html: `<div class="relative flex items-center justify-center">
-    <div class="w-3.5 h-3.5 rounded-full bg-blue-500 border-2 border-white shadow-md animate-bounce"></div>
-  </div>`,
-  className: "start-pin-icon",
-  iconSize: [14, 14],
-  iconAnchor: [7, 7]
-});
-
-const getEndPinIcon = () => L.divIcon({
-  html: `<div class="relative flex items-center justify-center">
-    <div class="w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white shadow-md animate-bounce"></div>
-  </div>`,
-  className: "end-pin-icon",
-  iconSize: [14, 14],
-  iconAnchor: [7, 7]
-});
-
-// Map controller to dynamically update center and fit bounds when data changes
-function MapController({ sites, polygons, lines }: { sites: any[]; polygons: any[]; lines: any[] }) {
-  const map = useMap();
-
-  useEffect(() => {
-    if (sites.length === 0) return;
-
-    // Collect all coordinates to calculate bounds
-    const coords: [number, number][] = [];
-    sites.forEach((s) => coords.push([s.latitude, s.longitude]));
-    
-    polygons.forEach((p) => {
-      p.coordinates.forEach((c: any) => coords.push([c[1], c[0]]));
-    });
-
-    lines.forEach((l) => {
-      l.coordinates.forEach((c: any) => coords.push([c[1], c[0]]));
-    });
-
-    if (coords.length > 0) {
-      const bounds = L.latLngBounds(coords);
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
-    }
-  }, [sites, polygons, lines, map]);
-
-  return null;
-}
-
-const SECTOR_COLORS = ["#3B82F6", "#22C55E", "#F59E0B"];
+const SECTOR_COLORS = ["#38BDF8", "#22C55E", "#F59E0B"];
 
 interface SectorInfo {
   azimuths: number[];
@@ -126,37 +58,13 @@ interface MapInnerProps {
   onAddCpe?: (lat: number, lng: number) => void;
   mapMode?: "normal" | "measure" | "addcpe";
   setMapMode?: (mode: "normal" | "measure" | "addcpe") => void;
-  hoverPoint?: [number, number] | null;
   opacity?: number;
   setOpacity?: (opacity: number) => void;
   mapTheme?: "dark" | "satellite" | "street";
   setMapTheme?: (theme: "dark" | "satellite" | "street") => void;
   measurePoints?: [number, number][];
   setMeasurePoints?: (points: [number, number][]) => void;
-}
-
-function sectorPolygon(
-  btsLat: number,
-  btsLon: number,
-  azimuth: number,
-  hpbw: number,
-  radiusKm: number
-): [number, number][] {
-  const points: [number, number][] = [[btsLat, btsLon]];
-  const startAngle = azimuth - hpbw / 2;
-  const endAngle = azimuth + hpbw / 2;
-  const numPts = 30;
-  const btsLatRad = (btsLat * Math.PI) / 180;
-
-  for (let i = 0; i <= numPts; i++) {
-    const angle = startAngle + (i / numPts) * (endAngle - startAngle);
-    const angleRad = (angle * Math.PI) / 180;
-    const dLat = (radiusKm / 111.32) * Math.cos(angleRad);
-    const dLon = (radiusKm / (111.32 * Math.cos(btsLatRad))) * Math.sin(angleRad);
-    points.push([btsLat + dLat, btsLon + dLon]);
-  }
-  points.push([btsLat, btsLon]);
-  return points;
+  isSidebarExpanded?: boolean;
 }
 
 export default function MapInner({
@@ -176,364 +84,375 @@ export default function MapInner({
   onAddCpe,
   mapMode = "normal",
   setMapMode,
-  hoverPoint,
   opacity = 0.45,
   setOpacity,
   mapTheme = "dark",
   setMapTheme,
   measurePoints = [],
   setMeasurePoints,
+  isSidebarExpanded = true,
 }: MapInnerProps) {
-  // Default center Buonaventura Colombia (SPRBUN)
-  const defaultCenter: [number, number] = [3.89, -77.08];
+  const mapRef = useRef<MapRef>(null);
+  const defaultCenter = { longitude: -77.08, latitude: 3.89, zoom: 13 };
 
-  const getTileUrl = () => {
+  const [popupInfo, setPopupInfo] = useState<any>(null);
+
+  // Auto-fit bounds when sites or geometry changes
+  useEffect(() => {
+    if (!mapRef.current || sites.length === 0) return;
+    const coords: [number, number][] = [];
+    sites.forEach((s) => coords.push([s.longitude, s.latitude]));
+    
+    if (coords.length > 0) {
+      const line = turf.lineString(coords);
+      const bbox = turf.bbox(line) as [number, number, number, number];
+      // Padding handles sidebar overlap nicely
+      mapRef.current.fitBounds(bbox, { padding: { top: 50, bottom: 50, left: isSidebarExpanded ? 400 : 100, right: 50 }, maxZoom: 15, duration: 1000 });
+    }
+  }, [sites, isSidebarExpanded]);
+
+  const getMapStyle = () => {
     if (mapTheme === "satellite") {
-      return "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+      return {
+        version: 8,
+        sources: {
+          satellite: {
+            type: "raster",
+            tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+            tileSize: 256,
+          },
+        },
+        layers: [{ id: "satellite", type: "raster", source: "satellite" }],
+      } as any;
     }
     if (mapTheme === "street") {
-      return "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+      return "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
     }
-    return "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+    return "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
   };
 
-  const getTileAttribution = () => {
-    if (mapTheme === "satellite") {
-      return "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community";
+  const handleMapClick = (e: maplibregl.MapMouseEvent) => {
+    if (mapMode === "measure" && setMeasurePoints) {
+      const newPoints = [...measurePoints, [e.lngLat.lat, e.lngLat.lng] as [number, number]];
+      if (newPoints.length > 2) {
+        setMeasurePoints([[e.lngLat.lat, e.lngLat.lng]]);
+      } else {
+        setMeasurePoints(newPoints);
+      }
+    } else if (mapMode === "addcpe" && onAddCpe) {
+      onAddCpe(e.lngLat.lat, e.lngLat.lng);
     }
-    if (mapTheme === "street") {
-      return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-    }
-    return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
-  };
-
-  const geojsonStyle = (feature: any) => {
-    return {
-      fillColor: feature.properties.fill,
-      fillOpacity: opacity,
-      stroke: false,
-      weight: 0,
-    };
   };
 
   const btsCandidates = sites.filter((s) => s.is_bts_candidate);
 
-  const haversineKm = (a: [number, number], b: [number, number]) => {
-    const R = 6371;
-    const dLat = ((b[0] - a[0]) * Math.PI) / 180;
-    const dLon = ((b[1] - a[1]) * Math.PI) / 180;
-    const lat1 = (a[0] * Math.PI) / 180;
-    const lat2 = (b[0] * Math.PI) / 180;
-    const x = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-    return R * 2 * Math.asin(Math.sqrt(x));
-  };
-
-  // Map clicks helper component
-  function MapEventsHelper() {
-    useMapEvents({
-      click(e) {
-        if (mapMode === "measure" && setMeasurePoints) {
-          const newPoints = [...measurePoints, [e.latlng.lat, e.latlng.lng] as [number, number]];
-          if (newPoints.length > 2) {
-            setMeasurePoints([[e.latlng.lat, e.latlng.lng]]);
-          } else {
-            setMeasurePoints(newPoints);
-          }
-        } else if (mapMode === "addcpe" && onAddCpe) {
-          onAddCpe(e.latlng.lat, e.latlng.lng);
-        }
-      }
+  // Create sector feature collection
+  const sectorGeoJSON = useMemo(() => {
+    if (!sectorInfo || selectedBtsIndex === -1 || !btsCandidates[selectedBtsIndex]) return null;
+    const bts = btsCandidates[selectedBtsIndex];
+    const features = sectorInfo.azimuths.map((az, i) => {
+      const poly = generateSectorGeoJSON(bts.latitude, bts.longitude, az, sectorInfo.hpbw, sectorInfo.radiusKm);
+      poly.properties = { color: SECTOR_COLORS[i % SECTOR_COLORS.length] };
+      return poly;
     });
-    return null;
-  }
+    return turf.featureCollection(features);
+  }, [sectorInfo, selectedBtsIndex, btsCandidates]);
+
+  // Filter the coverage geojson based on threshold
+  const filteredCoverage = useMemo(() => {
+    if (!coverageGeojson || !coverageGeojson.features) return null;
+    const filteredFeatures = coverageGeojson.features.filter((f: any) => {
+      if (typeof f.properties?.rssi === "number") {
+        return f.properties.rssi >= activeThreshold;
+      }
+      return true;
+    });
+    return turf.featureCollection(filteredFeatures);
+  }, [coverageGeojson, activeThreshold]);
+
+  // Measure path GeoJSON
+  const measureGeoJSON = useMemo(() => {
+    if (measurePoints.length < 2) return null;
+    return turf.featureCollection([
+      turf.lineString([[measurePoints[0][1], measurePoints[0][0]], [measurePoints[1][1], measurePoints[1][0]]])
+    ]);
+  }, [measurePoints]);
 
   return (
     <div className={`w-full h-full relative ${mapMode !== "normal" ? "cursor-crosshair" : ""}`}>
-      <MapContainer center={defaultCenter} zoom={13} className="w-full h-full">
-        {/* Switchable map tiles */}
-        <TileLayer
-          key={mapTheme}
-          url={getTileUrl()}
-          attribution={getTileAttribution()}
-        />
+      <Map
+        ref={mapRef}
+        initialViewState={defaultCenter}
+        mapStyle={getMapStyle()}
+        onClick={handleMapClick}
+        interactiveLayerIds={['coverage-fill']}
+      >
+        <NavigationControl position="bottom-right" />
+        <ScaleControl position="bottom-right" />
 
-        {/* Map events click handler */}
-        <MapEventsHelper />
-
-        {/* Map Controller */}
-        <MapController sites={sites} polygons={polygons} lines={lines} />
-
-        {/* KML Polygons (Blue boundary outline) */}
-        {polygons.map((poly, idx) => (
-          <Polygon
-            key={`poly-${idx}`}
-            positions={poly.coordinates.map((c: any) => [c[1], c[0]])}
-            pathOptions={{ color: "#3B82F6", fillOpacity: 0.05, weight: 2 }}
-          >
-            <Popup>
-              <div className="text-xs">
-                <span className="font-semibold block">{poly.name || "KML Polygon"}</span>
-                {poly.description && <span className="text-slate-400 mt-1 block">{poly.description}</span>}
-              </div>
-            </Popup>
-          </Polygon>
+        {/* Measure Points and Lines */}
+        {measurePoints.map((pt, i) => (
+          <Marker key={`measure-${i}`} latitude={pt[0]} longitude={pt[1]} anchor="center">
+            <div className="w-4 h-4 bg-white border-2 border-primary rounded-full shadow-[0_0_10px_rgba(255,255,255,0.8)]" />
+          </Marker>
         ))}
-
-        {/* KML Lines (Dashed blue lines) */}
-        {lines.map((line, idx) => (
-          <Polyline
-            key={`line-${idx}`}
-            positions={line.coordinates.map((c: any) => [c[1], c[0]])}
-            pathOptions={{ color: "#3B82F6", weight: 2, dashArray: "5,5" }}
+        {measureGeoJSON && (
+          <Source id="measure-line-source" type="geojson" data={measureGeoJSON as any}>
+            <Layer
+              id="measure-line"
+              type="line"
+              paint={{
+                "line-color": "#ffffff",
+                "line-width": 3,
+                "line-dasharray": [2, 2]
+              }}
+            />
+          </Source>
+        )}
+        {measurePoints.length === 2 && (
+          <Popup
+            latitude={(measurePoints[0][0] + measurePoints[1][0]) / 2}
+            longitude={(measurePoints[0][1] + measurePoints[1][1]) / 2}
+            closeButton={false}
+            closeOnClick={false}
+            anchor="bottom"
+            offset={10}
+            className="spatial-popup measure-popup"
           >
-            <Popup>
-              <div className="text-xs">
-                <span className="font-semibold block">{line.name || "KML Line"}</span>
-              </div>
-            </Popup>
-          </Polyline>
-        ))}
-
-        {/* Heatmap GeoJSON Layer */}
-        {coverageGeojson && (
-          <GeoJSON
-            key={`${activeScenario}-${activeThreshold}-${opacity}-${JSON.stringify(coverageGeojson.features?.[0]?.properties || {})}`}
-            data={coverageGeojson}
-            style={geojsonStyle}
-            filter={(feature) => {
-              if (feature && feature.properties && typeof feature.properties.rssi === "number") {
-                return feature.properties.rssi >= activeThreshold;
-              }
-              return true;
-            }}
-          />
+            <div className="text-sm font-mono font-bold text-primary">
+              {turf.distance(
+                turf.point([measurePoints[0][1], measurePoints[0][0]]),
+                turf.point([measurePoints[1][1], measurePoints[1][0]]),
+                { units: "kilometers" }
+              ).toFixed(2)} km
+            </div>
+          </Popup>
         )}
 
-        {/* Sector wedge overlays — shown after simulation only */}
-        {selectedBtsIndex !== -1 && sectorInfo && btsCandidates[selectedBtsIndex] &&
-          sectorInfo.azimuths.map((az, i) => {
-            const bts = btsCandidates[selectedBtsIndex];
-            const pts = sectorPolygon(bts.latitude, bts.longitude, az, sectorInfo.hpbw, sectorInfo.radiusKm);
-            const color = SECTOR_COLORS[i % SECTOR_COLORS.length];
-            return (
-              <Polygon
-                key={`sector-${i}-${az}-${sectorInfo.hpbw}-${sectorInfo.radiusKm}`}
-                positions={pts}
-                pathOptions={{
-                  fillColor: color,
-                  fillOpacity: 0.12,
-                  color: color,
-                  weight: 1,
-                  dashArray: "5,5",
-                  opacity: 0.5,
-                }}
-              />
-            );
-          })
-        }
+        {/* Heatmap GeoJSON */}
+        {filteredCoverage && (
+          <Source id="coverage-source" type="geojson" data={filteredCoverage as any}>
+            <Layer
+              id="coverage-fill"
+              type="fill"
+              paint={{
+                "fill-color": ["get", "fill"],
+                "fill-opacity": opacity,
+                "fill-outline-color": "rgba(0,0,0,0)",
+              }}
+            />
+          </Source>
+        )}
+
+        {/* Sector wedges */}
+        {sectorGeoJSON && (
+          <Source id="sectors-source" type="geojson" data={sectorGeoJSON as any}>
+            <Layer
+              id="sectors-fill"
+              type="fill"
+              paint={{
+                "fill-color": ["get", "color"],
+                "fill-opacity": 0.12,
+              }}
+            />
+            <Layer
+              id="sectors-line"
+              type="line"
+              paint={{
+                "line-color": ["get", "color"],
+                "line-width": 1,
+                "line-dasharray": [5, 5],
+              }}
+            />
+          </Source>
+        )}
 
         {/* BTS Site Markers */}
         {btsCandidates.map((site, index) => {
           const isActive = index === selectedBtsIndex;
-          const latLng: [number, number] = [site.latitude, site.longitude];
-
           return (
             <Marker
               key={`bts-${index}`}
-              position={latLng}
-              icon={getBtsIcon(isActive)}
-              draggable={true}
-              eventHandlers={{
-                dragend: (e) => {
-                  const marker = e.target;
-                  const position = marker.getLatLng();
-                  if (onMoveBts) {
-                    onMoveBts(index, position.lat, position.lng);
-                  }
-                }
+              longitude={site.longitude}
+              latitude={site.latitude}
+              anchor="center"
+              draggable
+              onDragEnd={(e) => {
+                if (onMoveBts) onMoveBts(index, e.lngLat.lat, e.lngLat.lng);
+              }}
+              onClick={(e) => {
+                e.originalEvent.stopPropagation();
+                setPopupInfo({ type: "bts", site, index, isActive });
               }}
             >
-              <Popup>
-                <div className="text-xs space-y-2">
-                  <div>
-                    <span className="font-bold text-sm text-amber-400">BTS: {site.name}</span>
-                    <span className="text-slate-400 block mt-0.5">Lat: {site.latitude.toFixed(5)}, Lon: {site.longitude.toFixed(5)}</span>
-                  </div>
-                  {!isActive && (
-                    <button
-                      onClick={() => onSelectBts(index)}
-                      className="px-2 py-1 bg-amber-500 text-slate-950 font-semibold rounded hover:bg-amber-400 text-[10px] w-full transition cursor-pointer border-none"
-                    >
-                      Set as Active BTS
-                    </button>
-                  )}
+              <div className="relative flex items-center justify-center cursor-pointer">
+                {isActive && <span className="absolute w-10 h-10 rounded-full bg-primary/30 animate-ping"></span>}
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center shadow-xl ${isActive ? "bg-primary border-2 border-white" : "bg-slate-700 border border-slate-500"}`}>
+                  <div className="w-2.5 h-2.5 rounded-full bg-slate-950"></div>
                 </div>
-              </Popup>
+              </div>
             </Marker>
           );
         })}
 
-        {/* CPE client Markers */}
+        {/* CPE Markers */}
         {cpeResults.map((cpe, index) => {
           const isSelected = cpe.name === selectedCpeName;
           const color = getCpeColor(cpe);
-
           return (
-            <CircleMarker
+            <Marker
               key={`cpe-${index}`}
-              center={[cpe.latitude, cpe.longitude]}
-              radius={isSelected ? 9 : 6}
-              weight={isSelected ? 2 : 1}
-              color={color}
-              fillColor={color}
-              fillOpacity={0.9}
-              eventHandlers={{
-                click: () => onSelectCpe(cpe),
+              longitude={cpe.longitude}
+              latitude={cpe.latitude}
+              anchor="center"
+              onClick={(e) => {
+                e.originalEvent.stopPropagation();
+                onSelectCpe(cpe);
+                setPopupInfo({ type: "cpe", cpe });
               }}
             >
-              <Popup>
-                <div className="text-xs space-y-1">
-                  <span className="font-bold text-white block">{cpe.name}</span>
-                  {cpe.serving_bts_name && (
-                    <span className="text-[10px] text-amber-300 block">Server: {cpe.serving_bts_name}</span>
-                  )}
-                  <div className="grid grid-cols-2 gap-x-2 text-[10px]">
-                    <span className="text-slate-400">Distance:</span>
-                    <span className="text-right">{cpe.distance_km.toFixed(2)} km</span>
-                    <span className="text-slate-400">RSSI:</span>
-                    <span className="text-right font-medium">{cpe.rssi_dbm.toFixed(1)} dBm</span>
-                    <span className="text-slate-400">Margin:</span>
-                    <span
-                      className={`text-right font-bold ${
-                        cpe.margin_db >= 10
-                          ? "text-emerald-400"
-                          : cpe.margin_db >= 0
-                          ? "text-amber-400"
-                          : "text-red-400"
-                      }`}
-                    >
-                      {cpe.margin_db.toFixed(1)} dB
-                    </span>
-                  </div>
-                  <span className="text-[9px] text-slate-500 block mt-1">Click in table to show terrain profile</span>
-                </div>
-              </Popup>
-            </CircleMarker>
+              <div className="relative flex items-center justify-center cursor-pointer">
+                {isSelected && <span className="absolute w-8 h-8 rounded-full bg-primary/40 animate-ping"></span>}
+                <div 
+                  className={`rounded-full border border-white shadow-lg transition-transform duration-300 ${isSelected ? "w-4 h-4 border-2 scale-125" : "w-3 h-3"}`}
+                  style={{ backgroundColor: color }}
+                />
+              </div>
+            </Marker>
           );
         })}
 
-        {/* Measure Tool Rendering */}
-        {measurePoints.length > 0 && (
-          <Marker position={measurePoints[0]} icon={getStartPinIcon()} />
-        )}
-        {measurePoints.length > 1 && (
-          <>
-            <Marker position={measurePoints[1]} icon={getEndPinIcon()} />
-            <Polyline positions={measurePoints} pathOptions={{ color: "#3B82F6", weight: 3, dashArray: "6,6" }}>
-              <Tooltip permanent direction="center" className="measure-distance-tooltip">
-                {haversineKm(measurePoints[0], measurePoints[1]).toFixed(2)} km
-              </Tooltip>
-            </Polyline>
-          </>
+        {/* Popup Rendering */}
+        {popupInfo?.type === "bts" && (
+          <Popup
+            anchor="bottom"
+            longitude={popupInfo.site.longitude}
+            latitude={popupInfo.site.latitude}
+            onClose={() => setPopupInfo(null)}
+            closeOnClick={false}
+            offset={14}
+            className="spatial-popup"
+          >
+            <div className="space-y-2">
+              <div>
+                <span className="font-bold text-sm text-primary">BTS: {popupInfo.site.name}</span>
+                <span className="text-muted-foreground block mt-0.5 text-xs font-mono">Lat: {popupInfo.site.latitude.toFixed(5)}, Lon: {popupInfo.site.longitude.toFixed(5)}</span>
+              </div>
+              {!popupInfo.isActive && (
+                <button
+                  onClick={() => {
+                    onSelectBts(popupInfo.index);
+                    setPopupInfo(null);
+                  }}
+                  className="px-2 py-1.5 bg-primary text-primary-foreground font-semibold rounded hover:bg-opacity-80 text-[10px] w-full transition cursor-pointer border-none uppercase tracking-wider"
+                >
+                  Set as Active BTS
+                </button>
+              )}
+            </div>
+          </Popup>
         )}
 
-        {/* Live Hover Pulse Marker */}
-        {hoverPoint && (
-          <Marker
-            position={hoverPoint}
-            icon={L.divIcon({
-              html: `<div class="relative flex items-center justify-center">
-                <span class="absolute w-8 h-8 rounded-full bg-blue-500/40 animate-ping"></span>
-                <div class="w-3 h-3 rounded-full bg-blue-500 border border-white shadow-lg"></div>
-              </div>`,
-              className: "hover-pulse-icon",
-              iconSize: [24, 24],
-              iconAnchor: [12, 12],
-            })}
-          />
+        {popupInfo?.type === "cpe" && (
+          <Popup
+            anchor="bottom"
+            longitude={popupInfo.cpe.longitude}
+            latitude={popupInfo.cpe.latitude}
+            onClose={() => setPopupInfo(null)}
+            closeOnClick={false}
+            offset={12}
+            className="spatial-popup"
+          >
+            <div className="text-xs space-y-1">
+              <span className="font-bold text-foreground block">{popupInfo.cpe.name}</span>
+              {popupInfo.cpe.serving_bts_name && (
+                <span className="text-[10px] text-primary block">Server: {popupInfo.cpe.serving_bts_name}</span>
+              )}
+              <div className="grid grid-cols-2 gap-x-2 text-[10px] font-mono mt-2">
+                <span className="text-muted-foreground">Dist:</span>
+                <span className="text-right">{popupInfo.cpe.distance_km.toFixed(2)} km</span>
+                <span className="text-muted-foreground">RSSI:</span>
+                <span className="text-right font-medium">{popupInfo.cpe.rssi_dbm.toFixed(1)} dBm</span>
+                <span className="text-muted-foreground">Margin:</span>
+                <span className={`text-right font-bold ${popupInfo.cpe.margin_db >= 10 ? "text-emerald-400" : popupInfo.cpe.margin_db >= 0 ? "text-amber-400" : "text-red-400"}`}>
+                  {popupInfo.cpe.margin_db.toFixed(1)} dB
+                </span>
+              </div>
+            </div>
+          </Popup>
         )}
-      </MapContainer>
+      </Map>
 
-      {/* Map Mode Floating Toolbar Overlay */}
-      <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-1.5 bg-slate-900/90 border border-slate-800 p-1.5 rounded-lg shadow-xl backdrop-blur max-w-[120px]">
+      {/* Floating Toolbar Overlay */}
+      <div className="glass-panel absolute top-4 right-4 z-[10] flex flex-col gap-1 p-1 rounded-xl">
         <button
-          onClick={() => {
-            if (setMapMode) setMapMode("normal");
-            if (setMeasurePoints) setMeasurePoints([]);
-          }}
+          onClick={() => { if (setMapMode) setMapMode("normal"); if (setMeasurePoints) setMeasurePoints([]); }}
           title="Pan & Selection Mode"
-          className={`p-2 rounded-md transition ${
-            mapMode === "normal"
-              ? "bg-blue-600 text-white font-bold"
-              : "text-slate-400 hover:text-white hover:bg-slate-800"
-          }`}
+          className={`p-2.5 rounded-lg transition-all ${mapMode === "normal" ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground hover:text-foreground hover:bg-white/5"}`}
         >
           <MousePointer className="w-4 h-4" />
         </button>
         <button
-          onClick={() => {
-            if (setMapMode) setMapMode("measure");
-            if (setMeasurePoints) setMeasurePoints([]);
-          }}
-          title="Interactive Distance & Profile Measure Tool"
-          className={`p-2 rounded-md transition ${
-            mapMode === "measure"
-              ? "bg-blue-600 text-white font-bold"
-              : "text-slate-400 hover:text-white hover:bg-slate-800"
-          }`}
+          onClick={() => { if (setMapMode) setMapMode("measure"); if (setMeasurePoints) setMeasurePoints([]); }}
+          title="Measure Tool"
+          className={`p-2.5 rounded-lg transition-all ${mapMode === "measure" ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground hover:text-foreground hover:bg-white/5"}`}
         >
           <Ruler className="w-4 h-4" />
         </button>
         <button
-          onClick={() => {
-            if (setMapMode) setMapMode("addcpe");
-            if (setMeasurePoints) setMeasurePoints([]);
-          }}
-          title="Add CPE — click the map to drop a client site (P2MP)"
-          className={`p-2 rounded-md transition ${
-            mapMode === "addcpe"
-              ? "bg-blue-600 text-white font-bold"
-              : "text-slate-400 hover:text-white hover:bg-slate-800"
-          }`}
+          onClick={() => { if (setMapMode) setMapMode("addcpe"); if (setMeasurePoints) setMeasurePoints([]); }}
+          title="Add CPE Client"
+          className={`p-2.5 rounded-lg transition-all ${mapMode === "addcpe" ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground hover:text-foreground hover:bg-white/5"}`}
         >
           <MapPin className="w-4 h-4" />
         </button>
 
-        <div className="border-t border-slate-800 my-1"></div>
+        <div className="w-full h-px bg-border my-1" />
         
-        {/* Theme Select Switcher */}
         <select
           value={mapTheme}
           onChange={(e) => setMapTheme && setMapTheme(e.target.value as any)}
-          className="bg-slate-950 text-[10px] text-slate-300 border border-slate-800 rounded px-1 py-1 focus:outline-none focus:border-blue-500 w-full"
+          className="bg-transparent text-[10px] font-medium text-foreground p-1.5 focus:outline-none w-full text-center appearance-none cursor-pointer"
         >
-          <option value="dark">Dark Matter</option>
-          <option value="satellite">Satellite</option>
-          <option value="street">Street Map</option>
+          <option value="dark">Dark</option>
+          <option value="satellite">Sat</option>
+          <option value="street">Street</option>
         </select>
       </div>
 
-      {/* Map Legend Overlay */}
-      <div className="absolute bottom-4 left-4 z-[1000] p-3 rounded-lg border border-slate-800 bg-slate-900/90 backdrop-blur text-xs text-slate-300 space-y-2 max-w-[200px]">
-        <h4 className="font-bold text-white text-[10px] uppercase tracking-wider">Legend</h4>
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded bg-[#2ecc71] block" />
-            <span>High RSSI (&ge; -65 dBm)</span>
+      {/* Map Legend Floating Ornament */}
+      <div className={`glass-panel absolute bottom-8 z-[10] p-4 rounded-2xl text-xs text-foreground space-y-3 min-w-[220px] transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        isSidebarExpanded ? "left-[430px]" : "left-[120px]"
+      }`}>
+        <h4 className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground">Signal Legend</h4>
+        <div className="space-y-2 font-mono">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-md bg-[#2ecc71] border border-white/10" />
+              <span>High</span>
+            </div>
+            <span className="text-[10px] text-muted-foreground">&ge; -65 dBm</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded bg-[#27ae60] block" />
-            <span>Good RSSI (-65 to -75)</span>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-md bg-[#27ae60] border border-white/10" />
+              <span>Good</span>
+            </div>
+            <span className="text-[10px] text-muted-foreground">-65 to -75</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded bg-[#f1c40f] block" />
-            <span>Marginal (-75 to -85)</span>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-md bg-[#f1c40f] border border-white/10" />
+              <span>Marginal</span>
+            </div>
+            <span className="text-[10px] text-muted-foreground">-75 to -85</span>
           </div>
           
-          {/* Opacity Slider */}
-          <div className="border-t border-slate-800 my-1 pt-1.5 space-y-1">
-            <div className="flex justify-between text-[9px] text-slate-400">
-              <span>Grid Opacity</span>
+          <div className="w-full h-px bg-border my-2" />
+          
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-[9px] text-muted-foreground uppercase tracking-wider">
+              <span>Heatmap Opacity</span>
               <span>{Math.round(opacity * 100)}%</span>
             </div>
             <input
@@ -543,27 +462,8 @@ export default function MapInner({
               step="0.05"
               value={opacity}
               onChange={(e) => setOpacity && setOpacity(Number(e.target.value))}
-              className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              className="w-full h-1.5 bg-secondary rounded-full appearance-none cursor-pointer accent-primary"
             />
-          </div>
-
-          <div className="border-t border-slate-800 my-1 pt-1.5 space-y-1.5">
-            <div className="flex items-center gap-2">
-              <span className="w-3.5 h-3.5 rounded-full bg-amber-500 border border-white flex items-center justify-center"><span className="w-1.5 h-1.5 rounded-full bg-slate-950"></span></span>
-              <span>Active BTS Site</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3.5 h-3.5 rounded-full bg-slate-700 border border-slate-500 flex items-center justify-center"><span className="w-1.5 h-1.5 rounded-full bg-slate-950"></span></span>
-              <span>Candidate BTS</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-white block" />
-              <span>CPE: Excellent / Good</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-500 border border-white block" />
-              <span>CPE: No Link</span>
-            </div>
           </div>
         </div>
       </div>
